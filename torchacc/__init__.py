@@ -114,6 +114,21 @@ def _set_env():
             xla_flags += f" {flag}={value}"
     os.environ["XLA_FLAGS"] = xla_flags
 
+import torch_xla
+def mark_dynamic(x, dims, bounds=None):
+    if isinstance(dims, int):
+        if bounds is None:
+            bounds = x.shape[dims]
+        assert isinstance(bounds, int)
+        torch_xla._XLAC._mark_dynamic(x, [dims], [bounds])
+    else:
+        assert isinstance(dims, list)
+        if bounds is None:
+            bounds = []
+            for dim in dims:
+                bounds.append(x.shape[dim])
+        assert isinstance(bounds, list)
+        torch_xla._XLAC._mark_dynamic(x, dims, bounds)
 
 patch.patch_fa()
 decompose.replace_decompose()
