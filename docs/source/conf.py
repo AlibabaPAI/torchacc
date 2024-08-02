@@ -61,10 +61,3 @@ latex_elements = {
         \setCJKmainfont{Noto Sans CJK SC}
     ''',
 }
-
-# Optionally declare the Python requirements required to build your docs
-python:
-   install:
-   - requirements: docs/requirements.txt
-   - method: pip
-     path: .
