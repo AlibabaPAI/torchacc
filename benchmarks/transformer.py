@@ -22,8 +22,9 @@ def _args_validation(args):
             raise ValueError('Torch native mode does not support PP. '
                              'Use --acc to enable TorchAcc when pp_size > 1.')
         if args.fsdp_size > 1:
-            raise ValueError('Torch native mode does not support FSDP. '
-                             'Use --acc to enable TorchAcc when fsdp_size > 1.')
+            raise ValueError(
+                'Torch native mode does not support FSDP. '
+                'Use --acc to enable TorchAcc when fsdp_size > 1.')
         if args.gc > 1:
             raise ValueError('Torch native mode does not support GC. '
                              'Use --acc to enable TorchAcc then using --gc.')
@@ -32,8 +33,9 @@ def _args_validation(args):
 def _parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='wikitext')
-    parser.add_argument(
-        '--dataset_config', type=str, default='wikitext-2-raw-v1')
+    parser.add_argument('--dataset_config',
+                        type=str,
+                        default='wikitext-2-raw-v1')
     parser.add_argument('--model_name', type=str, default='gpt2')
     parser.add_argument('--model_block', type=str, default='GPT2Block')
     parser.add_argument('--tb_folder', type=str, default='./log/tb/')
@@ -52,8 +54,9 @@ def _parse_args():
     parser.add_argument('--bf16', action='store_true', default=False)
     parser.add_argument('--gc', action='store_true', default=False)
     parser.add_argument('--profile', action='store_true', default=False)
-    parser.add_argument(
-        '--disable_loss_print', action='store_true', default=False)
+    parser.add_argument('--disable_loss_print',
+                        action='store_true',
+                        default=False)
 
     args = parser.parse_args()
     args.global_rank = int(os.getenv('RANK', '0'))
@@ -90,8 +93,8 @@ def _get_config(args):
 
 
 def _build_model_and_loader(args):
-    config = AutoConfig.from_pretrained(
-        args.model_name, cache_dir='./log/model_cache')
+    config = AutoConfig.from_pretrained(args.model_name,
+                                        cache_dir='./log/model_cache')
     model = AutoModelForCausalLM.from_config(config)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=False)
@@ -126,8 +129,10 @@ def _build_lr_scheduler(optimizer, loader, num_train_epochs):
 
 def train_gpt(args):
     model, train_loader = _build_model_and_loader(args)
-    optimizer = torch.optim.AdamW(
-        model.parameters(), lr=5e-5, betas=(0.9, 0.999), eps=1e-8)
+    optimizer = torch.optim.AdamW(model.parameters(),
+                                  lr=5e-5,
+                                  betas=(0.9, 0.999),
+                                  eps=1e-8)
     lr_scheduler = _build_lr_scheduler(optimizer, train_loader,
                                        args.num_train_epochs)
     scaler = torch.cuda.amp.GradScaler() if args.fp16 else None
@@ -160,8 +165,8 @@ def train_gpt(args):
                         if isinstance(value, torch.Tensor)
                     }
                 optimizer.zero_grad()
-                with torch.cuda.amp.autocast(
-                        enabled=amp_enabled, dtype=amp_dtype):
+                with torch.cuda.amp.autocast(enabled=amp_enabled,
+                                             dtype=amp_dtype):
                     outputs = model(**inputs)
                     loss = outputs['loss']
                 if scaler:
@@ -184,13 +189,13 @@ def train_gpt(args):
                     step = step + epoch * len(train_loader)
                     time_cost = time.time() - iteration_time
                     iteration_time = time.time()
-                    writer.add_scalar(
-                        'samples/s',
-                        args.batch_size / time_cost,
-                        global_step=step)
+                    writer.add_scalar('samples/s',
+                                      args.batch_size / time_cost,
+                                      global_step=step)
                     writer.add_scalar('loss', loss, global_step=step)
-                    writer.add_scalar(
-                        'lr', lr_scheduler.get_last_lr()[0], global_step=step)
+                    writer.add_scalar('lr',
+                                      lr_scheduler.get_last_lr()[0],
+                                      global_step=step)
                     logger.info(
                         f'[Iteration {step}/{len(train_loader)*args.num_train_epochs}] '
                         f'loss: {loss:.2f}, lr: {lr_scheduler.get_last_lr()[0]}, '

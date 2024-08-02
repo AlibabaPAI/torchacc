@@ -1,0 +1,41 @@
+name: Code Formatting Check
+
+on: 
+  pull_request:
+  push:
+    branches:
+      - master
+    tags:
+      - r[0-9]+.[0-9]+
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        cache: 'pip'
+    - run: pip install yapf==0.30.0
+    - name: Run yapf
+      shell: bash
+      run: |
+        git_status=$(git status --porcelain)
+        if [[ $git_status ]]; then
+          echo "Checkout code is not clean"
+          echo "${git_status}"
+          exit 1
+        fi
+
+        yapf -i -r *.py tests/ torchacc/
+        git_status=$(git status --porcelain)
+        if [[ $git_status ]]; then
+          git diff
+          echo "Python format failed."
+          echo "Running `yapf -i -r *.py tests/ torchacc/`"
+          exit 1
+        else
+          echo "Python format passed."
+        fi

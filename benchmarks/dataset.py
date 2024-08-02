@@ -12,11 +12,10 @@ def get_hf_dataset_loader(tokenizer,
                           global_rank=0,
                           dataset_config=None,
                           data_num_replicas=1):
-    raw_datasets = datasets.load_dataset(
-        dataset_name_or_path,
-        dataset_config,
-        split='train',
-        cache_dir='./log/dataset')
+    raw_datasets = datasets.load_dataset(dataset_name_or_path,
+                                         dataset_config,
+                                         split='train',
+                                         cache_dir='./log/dataset')
     column_names = list(raw_datasets.features)
     text_column_name = 'text' if 'text' in column_names else column_names[0]
 
@@ -33,15 +32,16 @@ def get_hf_dataset_loader(tokenizer,
 
     def group_texts(examples):
         concatenated_examples = {
-            k: list(itertools.chain(*examples[k])) for k in examples.keys()
+            k: list(itertools.chain(*examples[k]))
+            for k in examples.keys()
         }
         total_length = len(concatenated_examples[list(examples.keys())[0]])
         if total_length >= block_size:
             total_length = (total_length // block_size) * block_size
         result = {
-            k: [
-                t[i:i + block_size] for i in range(0, total_length, block_size)
-            ] for k, t in concatenated_examples.items()
+            k:
+            [t[i:i + block_size] for i in range(0, total_length, block_size)]
+            for k, t in concatenated_examples.items()
         }
         result['labels'] = result['input_ids'].copy()
         return result

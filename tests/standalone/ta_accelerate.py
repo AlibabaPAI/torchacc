@@ -7,7 +7,6 @@ from utils import EchoDataset, set_seed
 
 
 class Net(torch.nn.Module):
-
     def __init__(self):
         super().__init__()
         self.fc1 = torch.nn.Linear(1024, 1024)
@@ -72,12 +71,11 @@ def main(args):
     amp_dtype = torch.float16 if args.fp16 else torch.bfloat16
     amp_enabled = args.fp16 or args.bf16
 
-    train_loader = EchoDataset(
-        data=[
-            torch.zeros(batch_size, 1024),
-            torch.zeros(batch_size, dtype=torch.int64)
-        ],
-        repeat_count=train_steps)
+    train_loader = EchoDataset(data=[
+        torch.zeros(batch_size, 1024),
+        torch.zeros(batch_size, dtype=torch.int64)
+    ],
+                               repeat_count=train_steps)
 
     train_loader = ta.AsyncLoader(train_loader, device)
     total_loss = torch.tensor(0.0).to(device)
@@ -91,13 +89,16 @@ def main(args):
                     return scaler.scale(loss)
                 return loss
 
-            with torch.cuda.amp.autocast(
-                    enabled=amp_enabled, cache_enabled=True, dtype=amp_dtype):
-                loss = model.forward_backward(
-                    data[0], labels=data[1], output_fn=output_fn)
+            with torch.cuda.amp.autocast(enabled=amp_enabled,
+                                         cache_enabled=True,
+                                         dtype=amp_dtype):
+                loss = model.forward_backward(data[0],
+                                              labels=data[1],
+                                              output_fn=output_fn)
         else:
-            with torch.cuda.amp.autocast(
-                    enabled=amp_enabled, cache_enabled=True, dtype=amp_dtype):
+            with torch.cuda.amp.autocast(enabled=amp_enabled,
+                                         cache_enabled=True,
+                                         dtype=amp_dtype):
                 loss = model(data[0])
                 loss = torch.nn.functional.nll_loss(loss, data[1])
             if scaler is not None:
