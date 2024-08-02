@@ -19,6 +19,10 @@ copyright = f'{datetime.datetime.now().year}, {author}'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
+from recommonmark.parser import CommonMarkParser
+source_parsers = {
+    '.md': CommonMarkParser,
+}
 source_suffix = ['.rst', '.md']
 
 extensions = [
@@ -28,6 +32,7 @@ extensions = [
   'sphinx.ext.mathjax',
   'sphinx.ext.napoleon',
   'sphinx.ext.viewcode',
+  "myst_parser",
 ]
 
 add_module_names = False
@@ -56,3 +61,10 @@ latex_elements = {
         \setCJKmainfont{Noto Sans CJK SC}
     ''',
 }
+
+# Optionally declare the Python requirements required to build your docs
+python:
+   install:
+   - requirements: docs/requirements.txt
+   - method: pip
+     path: .
