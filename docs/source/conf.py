@@ -28,7 +28,6 @@ extensions = [
   'sphinx.ext.mathjax',
   'sphinx.ext.napoleon',
   'sphinx.ext.viewcode',
-  "myst_parser",
 ]
 
 add_module_names = False
