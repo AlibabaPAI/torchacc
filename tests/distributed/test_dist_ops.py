@@ -6,7 +6,6 @@ from utils.distributed import MultiProcessTestBase, init_pg, skip_if_lt_x_gpu
 
 
 class DistTest(MultiProcessTestBase):
-
     @property
     def world_size(self) -> int:
         return 4

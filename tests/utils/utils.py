@@ -9,7 +9,6 @@ def set_seed(seed=2023):
 class EchoDataset(object):
     """A dataset returns the complete data in each iteration.
     """
-
     def __init__(self, data, repeat_count):
         self._data = data
         self._repeat_count = repeat_count
@@ -29,7 +28,6 @@ class EchoDataset(object):
 
 
 class RawDataset(Dataset):
-
     def __init__(self, data):
         self.data = data
 

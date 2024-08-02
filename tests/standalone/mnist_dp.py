@@ -9,7 +9,6 @@ from utils import EchoDataset
 
 
 class Net(torch.nn.Module):
-
     def __init__(self):
         super(Net, self).__init__()
         self.conv1 = torch.nn.Conv2d(1, 32, 3, 1)
@@ -64,18 +63,16 @@ def train(args, model, train_loader, optimizer, epoch, scaler):
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument(
-        '--batch-size',
-        type=int,
-        default=256,
-        metavar='N',
-        help='input batch size for training (default: 64)')
-    parser.add_argument(
-        '--epochs',
-        type=int,
-        default=2,
-        metavar='N',
-        help='number of epochs to train (default: 14)')
+    parser.add_argument('--batch-size',
+                        type=int,
+                        default=256,
+                        metavar='N',
+                        help='input batch size for training (default: 64)')
+    parser.add_argument('--epochs',
+                        type=int,
+                        default=2,
+                        metavar='N',
+                        help='number of epochs to train (default: 14)')
     parser.add_argument(
         '--log-interval',
         type=int,
@@ -88,7 +85,8 @@ def main():
 
     train_loader = EchoDataset(
         data=(torch.zeros(args.batch_size, 1, 28,
-                          28), torch.zeros(args.batch_size, dtype=torch.int64)),
+                          28), torch.zeros(args.batch_size,
+                                           dtype=torch.int64)),
         repeat_count=60000 // args.batch_size // ta.dist.world_size())
 
     device = ta.lazy_device()
