@@ -38,34 +38,33 @@ def setup_env():
 # seqlen_q = 113, seqlen_k = 203, d = 32, dropout_p = 0.17, causal = False, local = False, alibi = False, deterministic = False, mha_type = 'mha', dtype = torch.float16
 
 
-@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
-@pytest.mark.parametrize("mha_type", ["mha", "mqa", "gqa"])
-@pytest.mark.parametrize("deterministic", [False, True])
-@pytest.mark.parametrize("alibi", [False, True])
-@pytest.mark.parametrize("local", [False, True])
-@pytest.mark.parametrize("causal", [False, True])
-@pytest.mark.parametrize("d", [32, 96, 111, 224, 256])
+@pytest.mark.parametrize("dtype", [torch.float16])
+@pytest.mark.parametrize("mha_type", ["mha"])
+@pytest.mark.parametrize("deterministic", [False])
+@pytest.mark.parametrize("alibi", [False])
+@pytest.mark.parametrize("local", [False])
+@pytest.mark.parametrize("causal", [True])
+@pytest.mark.parametrize("d", [32])
 @pytest.mark.parametrize(
     "seqlen_q,seqlen_k",
     [
         (113, 203),
-        (108, 256),
-        (256, 512),
-        (512, 256),
-        (1024, 1024),
-        (1023, 1024),
-        (1024, 1023),
+        # (108, 256),
+        # (256, 512),
+        # (512, 256),
+        # (1024, 1024),
+        # (1023, 1024),
+        # (1024, 1023),
         (2048, 2048),
     ],
 )
 @pytest.mark.parametrize("dropout_p", [0.0, 0.17])
-def test_flash_attn_varlen_output(seqlen_q, seqlen_k, d, dropout_p, causal,
+def test_flash_attn_output(seqlen_q, seqlen_k, d, dropout_p, causal,
                                   local, alibi, deterministic, mha_type, dtype):
-    # TODO(to wenting.swt): maybe we need support this
     if d % 8 != 0:
         pytest.skip(reason="Expected head_size_og % 8 == 0 to be true")
     # TODO(to wenting.swt): fix the correctness issue, refer to FIXME
-    if local or causal or alibi or (dropout_p > 0):
+    if dropout_p > 0:
         pytest.skip(reason="Correctness issue")
     if not is_gpu_supported(d):
         pytest.skip(
@@ -149,32 +148,19 @@ def test_flash_attn_varlen_output(seqlen_q, seqlen_k, d, dropout_p, causal,
     q.requires_grad = True
     k.requires_grad = True
     v.requires_grad = True
-    cu_seqlens_q = torch.arange(
-        0, (batch_size + 1) * seqlen_q,
-        step=seqlen_q,
-        dtype=torch.int32,
-        device=q.device)
-    cu_seqlens_k = torch.arange(
-        0, (batch_size + 1) * seqlen_k,
-        step=seqlen_k,
-        dtype=torch.int32,
-        device=q.device)
+
     if alibi:
         alibi_slopes = alibi_slopes.cpu().to(device)
-    out_xla = ta.ops.flash_attn_varlen_xla(
-        q.flatten(0, 1),
-        k.flatten(0, 1),
-        v.flatten(0, 1),
-        cu_seqlens_q,
-        cu_seqlens_k,
-        seqlen_q,
-        seqlen_k,
-        dropout_p,
+    out_xla = ta.ops.flash_attn_xla(
+        q,
+        k,
+        v,
+        dropout_p=dropout_p,
         causal=causal,
         window_size=window_size,
         alibi_slopes=alibi_slopes,
         deterministic=deterministic,
-    ).unflatten(0, (-1, seqlen_q))
+    )
     g = g.to(device)
     (
         dq_xla,

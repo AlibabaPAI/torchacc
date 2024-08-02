@@ -65,8 +65,8 @@ def patch_fa():
             return
         flash_attn.flash_attn_func = _choose_functions(
             flash_attn.flash_attn_func, ops.flash_attn_xla)
-        flash_attn.flash_attn_varlen_func = _choose_functions(
-            flash_attn.flash_attn_varlen_func, ops.flash_attn_varlen_xla)
+        # flash_attn.flash_attn_varlen_func = _choose_functions(
+        #     flash_attn.flash_attn_varlen_func, ops.flash_attn_varlen_xla)
     except ImportError:
         logger.warn(f"Patch flash_attn failed.")
 
