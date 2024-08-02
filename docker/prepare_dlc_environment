@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# try to dump requirements.txt from env REQUIREMENTS_TEXT
+if [ -n "${REQUIREMENTS_TEXT}" ]; then
+    REQUIREMENTS_DIR='/tmp'
+    requirements_path=${REQUIREMENTS_DIR}/requirements.txt
+
+    echo "INFO: Try to dump ENV REQUIREMENTS_TEXT to ${requirements_path}."
+    requirements_list=${REQUIREMENTS_TEXT//,/ }
+    for item in ${requirements_list}
+    do
+        echo ${item} >> ${REQUIREMENTS_DIR}/requirements.txt
+    done
+fi
+
+# try to install requirements.txt
+if [ -z "${REQUIREMENTS_DIR}" ]; then
+    REQUIREMENTS_DIR="."
+fi
+
+requirements_path=${REQUIREMENTS_DIR}/requirements.txt
+if [ -f "${requirements_path}" ]; then
+    echo "INFO: Try to install requirements from ${requirements_path}."
+    $(which python) -m pip install -r ${requirements_path}
+else
+    echo "WARN: ${requirements_path} not found, skip installing requirements."
+fi

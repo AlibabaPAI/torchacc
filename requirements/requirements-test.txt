@@ -1,0 +1,4 @@
+yapf==0.40.2
+pytest==7.3.2
+isort
+expecttest

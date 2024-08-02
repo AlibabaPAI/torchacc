@@ -1,0 +1,90 @@
+ARG base_docker
+FROM ${base_docker}
+
+RUN rm /bin/sh && ln -s /bin/bash /bin/sh
+ARG use_proxy
+
+ENV PROXY=${use_proxy:+'https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890'}
+
+# install required packages
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Shanghai
+RUN env ${PROXY} apt-get update \
+    && apt-get install -y software-properties-common \
+    && add-apt-repository -y ppa:ubuntu-toolchain-r/test \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && env ${PROXY} apt-get update -y \
+    && env ${PROXY} apt-get -y install --no-install-recommends \
+        build-essential \
+        wget \
+        curl \
+        git \
+        gcc-11 \
+        g++-11 \
+        libjpeg-dev \
+        libssl-dev \
+        unzip \
+        vim \
+        ninja-build \
+        libopenblas-dev \
+        ccache \
+        python3.10 \
+        python3.10-dev \
+    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
+    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100 \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3.10 100 \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 100 \
+    && apt-get clean all \
+    && rm -rf /var/lib/apt/lists/*
+ENV NVCC_PREPEND_FLAGS "-ccbin /usr/bin/g++-11"
+
+RUN env ${PROXY} curl -sS https://bootstrap.pypa.io/get-pip.py | env ${PROXY} python3.10
+RUN ln -sf /usr/local/bin/pip3 /usr/bin/pip
+RUN env ${PROXY} pip install mkl \
+                             mkl-include \
+                             typing_extensions \
+                             cffi \
+                             typing \
+                             pyyaml \
+                             numpy \
+                             ipython \
+                             dataclasses \
+                             yacs \
+                             cmake \
+                             tqdm \
+                             coverage \
+                             tensorboard \
+                             hypothesis \
+                             packaging \
+                             patchelf \
+                             setuptools
+
+# install bazel. The bazel version is obtained from xla/.bazelversion
+ARG bazel_version
+ARG bazel_file="bazel-${bazel_version}-installer-linux-x86_64.sh"
+RUN env ${PROXY} curl -L -O "http://github.com/bazelbuild/bazel/releases/download/${bazel_version}/${bazel_file}" \
+    && chmod 755 "$bazel_file" \
+    && ./"$bazel_file" --user \
+    && rm -f "$bazel_file"
+
+ENV PATH "/root/bin:$PATH"
+ENV TERM xterm
+
+# rdma related packages
+RUN apt-get update \
+    && apt-get install -y --allow-downgrades --allow-change-held-packages --no-install-recommends libnl-3-dev libnl-route-3-dev libnl-3-200 libnl-route-3-200 iproute2 udev dmidecode ethtool \
+    && apt-get clean \
+    && rm -rf /rm -rf /var/lib/apt/lists/*
+
+RUN cd /tmp/ && \
+    wget http://pythonrun.oss-cn-zhangjiakou.aliyuncs.com/rdma/nic-libs-mellanox-rdma-5.2-2/nic-lib-rdma-core-installer-ubuntu.tar.gz && \
+    tar xzvf nic-lib-rdma-core-installer-ubuntu.tar.gz && \
+    cd nic-lib-rdma-core-installer-ubuntu && \
+    echo Y | /bin/bash install.sh && \
+    cd .. && \
+    rm -rf nic-lib-rdma-core-installer-ubuntu && \
+    rm -f nic-lib-rdma-core-installer-ubuntu.tar.gz
+
+# DLC related files
+COPY prepare_dlc_environment /usr/bin/prepare_dlc_environment
+RUN chmod +x /usr/bin/prepare_dlc_environment
