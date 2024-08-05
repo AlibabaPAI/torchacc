@@ -13,7 +13,7 @@ git config --global --add safe.directory '*'
 
 function build_pytorch {
     pushd ${work_dir}/pytorch
-    export PYTORCH_BUILD_VERSION=2.2.2
+    export PYTORCH_BUILD_VERSION=2.3.0
     export PYTORCH_BUILD_NUMBER=1
     USE_CCACHE=1 TORCH_CUDA_ARCH_LIST=${cuda_compute_capabilities} \
         TORCH_NVCC_FLAGS="-Xfatbin -compress-all" \
