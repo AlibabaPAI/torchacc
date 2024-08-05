@@ -10,5 +10,5 @@ ENV PROXY=${use_proxy:+'https_proxy=http://127.0.0.1:7890 http_proxy=http://127.
 COPY ./whls/* ${work_dir}/
 RUN cd ${work_dir} \
     && env ${PROXY} pip install *.whl transformers==4.33.0 datasets pillow SentencePiece accelerate transformers_stream_generator tiktoken peft bitsandbytes scipy \
-    && env ${PROXY} pip install torchvision==0.17.0 --no-deps \
+    && env ${PROXY} pip install torchvision==0.18.0 --no-deps \
     && rm -rf ${work_dir}/* /root/.cache/pip
