@@ -9,6 +9,7 @@ from .core import (AsyncLoader, amp, fetch_gradients, is_lazy_device,
                    is_lazy_tensor, lazy_device, mark_step, save,
                    send_cpu_data_to_device, sync)
 from .core.accelerate_hf_trainer import accelerate_hf_trainer
+from .core.dynamic import mark_dynamic
 from .llm.qwen_patch import patch_qwen_model
 from .utils import decompose, patch
 from .version import __version__
@@ -23,6 +24,7 @@ _global_context = None
 class GlobalContext:
     config: Config = field(default_factory=Config)
     mesh: dist.Mesh = field(default_factory=dist.Mesh)
+    python_dispatcher = None
 
 
 def get_global_context():
@@ -114,21 +116,6 @@ def _set_env():
             xla_flags += f" {flag}={value}"
     os.environ["XLA_FLAGS"] = xla_flags
 
-import torch_xla
-def mark_dynamic(x, dims, bounds=None):
-    if isinstance(dims, int):
-        if bounds is None:
-            bounds = x.shape[dims]
-        assert isinstance(bounds, int)
-        torch_xla._XLAC._mark_dynamic(x, [dims], [bounds])
-    else:
-        assert isinstance(dims, list)
-        if bounds is None:
-            bounds = []
-            for dim in dims:
-                bounds.append(x.shape[dim])
-        assert isinstance(bounds, list)
-        torch_xla._XLAC._mark_dynamic(x, dims, bounds)
 
 patch.patch_fa()
 decompose.replace_decompose()
