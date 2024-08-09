@@ -1,12 +1,14 @@
 from typing import List, Union
 
 import torch
-from torch._dispatch.python import enable_python_dispatcher
 import torch_xla
+from torch._dispatch.python import enable_python_dispatcher
 
 import torchacc as ta
 
-def mark_dynamic(x: torch.Tensor, dims: Union[List[int], int], bounds: Union[List[int], int]):
+
+def mark_dynamic(x: torch.Tensor, dims: Union[List[int], int],
+                 bounds: Union[List[int], int]):
     """Mark a tensor as having dynamic dims and set corresponding upper bounds for the dims.
     Args:
         x (torch.Tensor): input tensor
