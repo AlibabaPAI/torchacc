@@ -17,6 +17,8 @@ def mark_dynamic(x: torch.Tensor, dims: Union[List[int], int],
         bounds (Union[List[int], int]): upper bounds corresponding to the dynamic dims
     """
     if ta.get_global_context().python_dispatcher is None:
+        # Some symint operators require this in order for the operator dispatch
+        # to work properly
         ta.get_global_context().python_dispatcher = enable_python_dispatcher()
     if isinstance(dims, int):
         dims = [dims]
