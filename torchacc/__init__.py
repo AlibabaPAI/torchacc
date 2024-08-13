@@ -58,6 +58,12 @@ def _set_env():
     #if 'XLA_USING_BUFFER_DONOR' not in os.environ:
     #    os.environ['XLA_USING_BUFFER_DONOR'] = '0'
 
+    # Use the value of the upper bound for shape comparison.
+    # TODO: This is experimental. It is necessary to remove this environment variable
+    # to support users to directly perform `if tensor.shape[0] > 10`.
+    os.environ['USE_BOUND_FOR_SHAPE_COMPARE'] = os.getenv(
+        'USE_BOUND_FOR_SHAPE_COMPARE', '1')
+
     if 'CUDA_DEVICE_MAX_CONNECTIONS' not in os.environ:
         os.environ['CUDA_DEVICE_MAX_CONNECTIONS'] = '1'
 
