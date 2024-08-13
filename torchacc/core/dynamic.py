@@ -33,4 +33,4 @@ def mark_dynamic(x: torch.Tensor, dims: Union[List[int], int],
         if bound < x.size(dim):
             raise ValueError(f"The upper bound of the shape size {bound} is less" \
                              f" than the current size {x.size(dim)}")
-    torch_xla._XLAC._mark_dynamic(x, dims, bounds)
+    torch_xla._XLAC._xla_mark_bounded_dynamic(x, dims, bounds)
