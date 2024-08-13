@@ -12,6 +12,7 @@ from torch.testing._internal.common_utils import (
 
 
 class MultiProcessTestBase(MultiProcessTestCase):
+
     def run_test(self, test_name: str, parent_pipe) -> None:
         os.environ['LOCAL_RANK'] = str(self.rank)
         os.environ['RANK'] = str(self.rank)
@@ -24,9 +25,7 @@ class MultiProcessTestBase(MultiProcessTestCase):
                 in backend) and torch.cuda.device_count() < self.world_size:
             sys.exit(TEST_SKIPS[f"multi-gpu-{self.world_size}"].exit_code)
 
-        if backend not in [
-                "nccl", "gloo", "mpi", "cpu:gloo,cuda:nccl", "lazy"
-        ]:
+        if backend not in ["nccl", "gloo", "mpi", "cpu:gloo,cuda:nccl", "lazy"]:
             raise RuntimeError(f"Backend {backend} not supported!")
 
         dist.init_process_group(
@@ -51,7 +50,9 @@ class MultiProcessTestBase(MultiProcessTestCase):
 
 
 def init_pg(backend):
+
     def decorator(func):
+
         @wraps(func)
         def wrapper(self, *args, **kwargs):
             self.init_pg(backend)

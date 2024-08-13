@@ -29,6 +29,7 @@ def setup_env():
 
 @instantiate_parametrized_tests
 class ContextParallelTest(MultiProcessTestBase):
+
     @skip_if_lt_x_gpu(2)
     @parametrize("is_cuda", [False, True])
     @parametrize("test_varlen", [False, True])
@@ -106,19 +107,20 @@ class ContextParallelTest(MultiProcessTestBase):
                 k_lens=q_lens,
                 softmax_scale=None,
                 dropout_p=0.0,
-                intra_process_group=context_parallel.
-                get_intra_cp_process_group(),
-                inter_process_group=context_parallel.
-                get_inter_cp_process_group())
+                intra_process_group=context_parallel.get_intra_cp_process_group(
+                ),
+                inter_process_group=context_parallel.get_inter_cp_process_group(
+                ))
         else:
-            output_cp = cp_func(q,
-                                k,
-                                v,
-                                q_lens=q_lens,
-                                k_lens=q_lens,
-                                softmax_scale=None,
-                                dropout_p=0.0,
-                                process_group=cp_group)
+            output_cp = cp_func(
+                q,
+                k,
+                v,
+                q_lens=q_lens,
+                k_lens=q_lens,
+                softmax_scale=None,
+                dropout_p=0.0,
+                process_group=cp_group)
 
         output_cp = context_parallel.gather_forward_split_backward(
             output_cp, seq_dim=1, process_group=cp_group)
@@ -138,34 +140,34 @@ class ContextParallelTest(MultiProcessTestBase):
         q, k, v = [
             einops.rearrange(x, "b s ... -> (b s) ...") for x in [q, k, v]
         ]
-        cu_q_lens = torch.arange(0, (B + 1) * N,
-                                 step=N,
-                                 dtype=torch.int32,
-                                 device=q.device)
+        cu_q_lens = torch.arange(
+            0, (B + 1) * N, step=N, dtype=torch.int32, device=q.device)
         if ta.is_lazy_tensor(q):
-            output_fa = flash_attn_varlen_xla(q,
-                                              k,
-                                              v,
-                                              cu_q_lens,
-                                              cu_q_lens,
-                                              N,
-                                              N,
-                                              dropout_p=0.0,
-                                              softmax_scale=None,
-                                              causal=False,
-                                              return_attn_probs=False)
+            output_fa = flash_attn_varlen_xla(
+                q,
+                k,
+                v,
+                cu_q_lens,
+                cu_q_lens,
+                N,
+                N,
+                dropout_p=0.0,
+                softmax_scale=None,
+                causal=False,
+                return_attn_probs=False)
         else:
-            output_fa = flash_attn_varlen_func(q,
-                                               k,
-                                               v,
-                                               cu_q_lens,
-                                               cu_q_lens,
-                                               N,
-                                               N,
-                                               dropout_p=0.0,
-                                               softmax_scale=None,
-                                               causal=False,
-                                               return_attn_probs=False)
+            output_fa = flash_attn_varlen_func(
+                q,
+                k,
+                v,
+                cu_q_lens,
+                cu_q_lens,
+                N,
+                N,
+                dropout_p=0.0,
+                softmax_scale=None,
+                causal=False,
+                return_attn_probs=False)
         output_fa = einops.rearrange(output_fa, "(b s) ... -> b s ...", b=B)
 
         loss_fa = torch.sum(output_fa)
@@ -173,10 +175,11 @@ class ContextParallelTest(MultiProcessTestBase):
 
         ta.mark_step()
 
-        fwd_close = torch.allclose(output_fa.cpu().detach().to(torch.float32),
-                                   output_cp.cpu().detach().to(torch.float32),
-                                   rtol=1e-5,
-                                   atol=1e-2)
+        fwd_close = torch.allclose(
+            output_fa.cpu().detach().to(torch.float32),
+            output_cp.cpu().detach().to(torch.float32),
+            rtol=1e-5,
+            atol=1e-2)
         bwd_close = torch.allclose(
             hidden_states_fa.grad.cpu().detach().to(torch.float32),
             hidden_states_cp.grad.cpu().detach().to(torch.float32),
