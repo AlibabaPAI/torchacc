@@ -10,6 +10,7 @@ from utils import EchoDataset, set_seed
 
 
 class Net(torch.nn.Module):
+
     def __init__(self):
         super().__init__()
         self.conv1 = torch.nn.Conv2d(1, 32, 3, 1)
@@ -36,6 +37,7 @@ class Net(torch.nn.Module):
 
 
 class SkipNet(torch.nn.Module):
+
     def __init__(self):
         super().__init__()
         self.fc1 = torch.nn.Linear(1024, 1024)
@@ -58,8 +60,8 @@ def autocast_amp(amp_enabled=True,
                  cache_enabled=True):
     if not amp_enabled:
         return contextlib.nullcontext()
-    ctx_manager = torch.cuda.amp.autocast(cache_enabled=cache_enabled,
-                                          dtype=amp_dtype)
+    ctx_manager = torch.cuda.amp.autocast(
+        cache_enabled=cache_enabled, dtype=amp_dtype)
     return ctx_manager
 
 
@@ -108,21 +110,23 @@ def main(args):
     amp_enabled = args.fp16 or args.bf16
 
     if args.test_skip:
-        train_loader = EchoDataset(data=[
-            torch.zeros(batch_size, 1024),
-            torch.zeros(batch_size, dtype=torch.int64)
-        ],
-                                   repeat_count=train_steps)
+        train_loader = EchoDataset(
+            data=[
+                torch.zeros(batch_size, 1024),
+                torch.zeros(batch_size, dtype=torch.int64)
+            ],
+            repeat_count=train_steps)
     else:
         mnist_trainset = torchvision.datasets.MNIST(
             root='./data',
             train=True,
             download=True,
             transform=torchvision.transforms.ToTensor())
-        train_loader = torch.utils.data.DataLoader(mnist_trainset,
-                                                   batch_size=batch_size,
-                                                   shuffle=False,
-                                                   drop_last=True)
+        train_loader = torch.utils.data.DataLoader(
+            mnist_trainset,
+            batch_size=batch_size,
+            shuffle=False,
+            drop_last=True)
 
     train_loader = ta.AsyncLoader(train_loader, device)
     total_loss = torch.tensor(0.0).to(device)
@@ -137,9 +141,8 @@ def main(args):
                 return loss
 
             with autocast_amp(amp_enabled, amp_dtype):
-                loss = model.forward_backward(data[0],
-                                              labels=data[1],
-                                              output_fn=output_fn)
+                loss = model.forward_backward(
+                    data[0], labels=data[1], output_fn=output_fn)
         else:
             with autocast_amp(amp_enabled, amp_dtype):
                 loss = model(data[0])

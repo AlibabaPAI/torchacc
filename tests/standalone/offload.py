@@ -9,6 +9,7 @@ from utils import EchoDataset, set_seed
 
 
 class LinearNet(torch.nn.Module):
+
     def __init__(self):
         super().__init__()
         self.fc1 = torch.nn.Linear(1024, 1024)
@@ -27,6 +28,7 @@ class LinearNet(torch.nn.Module):
 
 
 class Net(torch.nn.Module):
+
     def __init__(self, num_layers=4, num_offload_layers=3):
         super().__init__()
         self.layers = torch.nn.ModuleList(
@@ -85,11 +87,12 @@ def train(args, model, device, train_loader, optimizer, scaler):
 
 def main():
     parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch-size',
-                        type=int,
-                        default=32,
-                        metavar='N',
-                        help='input batch size for training (default: 32)')
+    parser.add_argument(
+        '--batch-size',
+        type=int,
+        default=32,
+        metavar='N',
+        help='input batch size for training (default: 32)')
     parser.add_argument(
         '--log-interval',
         type=int,
@@ -102,12 +105,12 @@ def main():
 
     dist.init_process_group(backend='nccl')
 
-    train_loader = EchoDataset(data=[
-        torch.randn(args.batch_size, 1024),
-        torch.zeros(args.batch_size, dtype=torch.int64)
-    ],
-                               repeat_count=1000 // args.batch_size //
-                               dist.get_world_size())
+    train_loader = EchoDataset(
+        data=[
+            torch.randn(args.batch_size, 1024),
+            torch.zeros(args.batch_size, dtype=torch.int64)
+        ],
+        repeat_count=1000 // args.batch_size // dist.get_world_size())
 
     device = dist.get_rank()
     model = Net()
