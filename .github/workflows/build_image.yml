@@ -1,9 +1,6 @@
 name: Daily Image Building Script Execution
 
 on:
-  push:
-    branches:
-      - dev/build_image
   workflow_dispatch:
   schedule:
     # Runs at 1:00 AM every day
@@ -18,7 +15,7 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Run shell script
-      run: cd docker && echo $OSS_ENDPOINT && bash ./build_docker.sh
+      run: cd docker && bash ./build_docker.sh
       env:
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
