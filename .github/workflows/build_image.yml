@@ -1,6 +1,9 @@
 name: Daily Image Building Script Execution
 
 on:
+  push:
+    branches:
+      - dev/build_image
   workflow_dispatch:
   schedule:
     # Runs at 1:00 AM every day
