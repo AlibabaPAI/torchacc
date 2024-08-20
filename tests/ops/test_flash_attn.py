@@ -6,6 +6,19 @@ import torchacc as ta
 from flash_attn import flash_attn_func
 
 
+def is_gpu_supported(dim):
+    # Skip flash attention ut for dim > 192 if not using A100/A800 or H100/H800
+    MAX_DIM = 192
+    if dim <= MAX_DIM:
+        return True
+    if torch.cuda.is_available():
+        gpu_name = torch.cuda.get_device_name(0)
+        target_gpus = ['A100', 'A800', 'H100', 'H800']
+        return any(target in gpu_name for target in target_gpus)
+    else:
+        return False
+
+
 @pytest.fixture(autouse=True, scope="module")
 def setup_env():
     orign_env = os.getenv('PJRT_ALLOCATOR_FRACTION')
@@ -54,6 +67,10 @@ def test_flash_attn_varlen_output(seqlen_q, seqlen_k, d, dropout_p, causal,
     # TODO(to wenting.swt): fix the correctness issue, refer to FIXME
     if local or causal or alibi or (dropout_p > 0):
         pytest.skip(reason="Correctness issue")
+    if not is_gpu_supported(d):
+        pytest.skip(
+            reason="FlashAttention for head dim >192 requires A100/A800 or H100/H800"
+        )
 
     device = "cuda"
     # set seed
