@@ -1,4 +1,4 @@
-name: Daily Image Building Script Execution
+name: Unit Tests
 
 on: 
   pull_request:
@@ -20,6 +20,6 @@ jobs:
     - name: Run unit test
       run: |
         docker pull $UT_IMAGE
-        docker run -v $PWD:$PWD -w $PWD --net host --ipc host --shm-size 80G  -it --rm --gpus all $UT_IMAGE bash -c 'pip install -r requirements/requirements-test.txt && bash tests/run_ut.sh'
+        docker run -v $PWD:$PWD -w $PWD --net host --ipc host --shm-size 80G -t --rm --gpus all $UT_IMAGE bash -c 'pip install -r requirements/requirements-test.txt && bash tests/run_ut.sh'
       env: 
         UT_IMAGE: ${{ secrets.UT_IMAGE }}
