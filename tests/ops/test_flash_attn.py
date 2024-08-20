@@ -14,6 +14,7 @@ def is_gpu_ampere_or_hopper():
     else:
         return False
 
+
 @pytest.fixture(autouse=True, scope="module")
 def setup_env():
     orign_env = os.getenv('PJRT_ALLOCATOR_FRACTION')
@@ -63,7 +64,9 @@ def test_flash_attn_varlen_output(seqlen_q, seqlen_k, d, dropout_p, causal,
     if local or causal or alibi or (dropout_p > 0):
         pytest.skip(reason="Correctness issue")
     if d > 192 and not is_gpu_ampere_or_hopper():
-        pytest.skip(reason="FlashAttention for head dim >192 requires A100/A800 or H100/H800")
+        pytest.skip(
+            reason="FlashAttention for head dim >192 requires A100/A800 or H100/H800"
+        )
 
     device = "cuda"
     # set seed
