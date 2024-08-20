@@ -29,12 +29,12 @@ jobs:
           exit 1
         fi
 
-        yapf -i -r *.py tests/ torchacc/
+        yapf -i -r *.py tests/ torchacc/ benchmarks/
         git_status=$(git status --porcelain)
         if [[ $git_status ]]; then
           git diff
           echo "Python format failed."
-          echo "Running `yapf -i -r *.py tests/ torchacc/`"
+          echo "Running `yapf -i -r *.py tests/ torchacc/ benchmarks/`"
           exit 1
         else
           echo "Python format passed."
