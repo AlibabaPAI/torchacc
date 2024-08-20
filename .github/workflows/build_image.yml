@@ -1,0 +1,24 @@
+name: Daily Image Building Script Execution
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs at 1:00 AM every day
+    - cron: '0 1 * * *'
+
+jobs:
+  run-shell-script:
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Run shell script
+      run: cd docker && bash ./build_docker.sh
+      env:
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        OSS_AK_ID: ${{ secrets.OSS_AK_ID }}
+        OSS_AK_SECRET: ${{ secrets.OSS_AK_SECRET }}
+        OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
