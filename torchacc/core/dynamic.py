@@ -25,6 +25,8 @@ def mark_dynamic(x: torch.Tensor, dims: Union[List[int], int],
         bounds = [bounds]
     assert isinstance(dims, list), "dims should be of int or list type"
     assert isinstance(bounds, list), "bounds should be of int or list type"
+    assert len(dims) == len(
+        bounds), "dims and bounds should have the same length"
     for i, dim in enumerate(dims):
         if dim < (-x.dim()) or dim >= x.dim():
             raise ValueError(f"Dimension out of range (expected to be in range" \
