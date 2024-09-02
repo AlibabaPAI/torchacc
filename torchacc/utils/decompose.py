@@ -21,23 +21,34 @@ if torch._C._has_mkldnn:
 
 
 def replace_decompose():
-    # get registered inplace decompose op
-    inplace_set = []
+    # get registered inplace and view decompose ops
+    inplace_ops = set()
+    view_ops = set()
     for type in ["meta", "post_autograd", "pre_autograd"]:
-        for keys in global_decomposition_table[type]:
-            op_name = keys.__name__.split('.')[0]
-            if op_name[-1] == '_' and keys not in inplace_set:
-                inplace_set.append(keys)
+        for op_overload in global_decomposition_table[type]:
+            op_name = op_overload.__name__.split('.')[0]
+            if op_name[-1] == '_' and op_overload not in inplace_ops:
+                inplace_ops.add(op_overload)
+            elif isinstance(
+                    op_overload, OpOverload
+            ) and op_overload.is_view and op_overload not in view_ops:
+                view_ops.add(op_overload)
 
     # clear decomposition table
     for key, table in global_decomposition_table.items():
         table.clear()
 
-    # build empty func for decompose inplace op
-    for op in inplace_set:
+    # build no op func for decompose inplace op
+    for op in inplace_ops:
 
         @register_decomposition(op)
-        def empty(*args, **kwargs):
+        def _torchacc_replace_meta_inplace_ops(*args, **kwargs):
+            return args[0]
+
+    for op in view_ops:
+
+        @register_decomposition(op)
+        def _torchacc_replace_meta_view_ops(*args, **kwargs):
             return args[0]
 
     # the function come from torch/_meta_registrations.py
