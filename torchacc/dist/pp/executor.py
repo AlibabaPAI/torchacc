@@ -14,12 +14,12 @@ from torchacc.dist.pp import microbatch, p2p, schedule
 
 
 def init_communication(mesh, device):
-    ta.mark_step()
+    ta.sync()
     # The XLA backend initializes the NCCL clique collectively at the start of the computation graph,
     # which can cause a hang in the PP scenario. Here, we initialize it in advance to avoid this.
     tmp = torch.tensor([0], device=device)
     dist.all_reduce(tmp, group=mesh.get_pp_proc_group())
-    ta.mark_step()
+    ta.sync()
 
 
 class PipeExecutor:
@@ -119,9 +119,9 @@ class PipeExecutor:
         self.agg_loss = torch.tensor(0.0, requires_grad=False).to(self.device)
 
         if self.device.type == 'xla':
-            self.maybe_mark_step = ta.mark_step
+            self.maybe_sync = ta.sync
         else:
-            self.maybe_mark_step = (lambda *args: None)
+            self.maybe_sync = (lambda *args: None)
 
         self.gc_enabled = not self.is_last_stage() if gc else False
         self.preserve_rng_state = True
@@ -528,24 +528,24 @@ class PipeExecutor:
         def recv_tensor_meta():
             recv_dtype = torch.LongTensor(data=[0]).to(self.device)
             p2p.recv(recv_dtype, send_stage)
-            self.maybe_mark_step()
+            self.maybe_sync()
             recv_dtype = self.ID_TO_DTYPE[recv_dtype.item()]
 
             recv_ndims = torch.LongTensor(data=[0]).to(self.device)
             p2p.recv(recv_ndims, send_stage)
-            self.maybe_mark_step()
+            self.maybe_sync()
             recv_ndims = recv_ndims.item()
 
             recv_shape = torch.LongTensor([1] * recv_ndims).to(self.device)
             p2p.recv(recv_shape, send_stage)
-            self.maybe_mark_step()
+            self.maybe_sync()
             recv_shape = recv_shape.tolist()
 
             return recv_dtype, recv_shape
 
         type_tensor = torch.LongTensor(data=[0]).to(self.device)
         p2p.recv(type_tensor, send_stage)
-        self.maybe_mark_step()
+        self.maybe_sync()
         recv_type = type_tensor.item()
 
         # A single tensor will be sent.
@@ -556,7 +556,7 @@ class PipeExecutor:
         elif recv_type == 1:
             count_tensor = torch.LongTensor(data=[0]).to(self.device)
             p2p.recv(count_tensor, send_stage)
-            self.maybe_mark_step()
+            self.maybe_sync()
 
             num_tensors = count_tensor.item()
             shapes = []
@@ -584,7 +584,7 @@ class PipeExecutor:
         else:
             raise NotImplementedError('Could not send output of type '
                                       f'{type(outputs)}')
-        self.maybe_mark_step()
+        self.maybe_sync()
 
     def _exec_send_grads(self, buffer_id):
         inputs = self.pipe_buffers['inputs'][buffer_id]
@@ -617,7 +617,7 @@ class PipeExecutor:
 
         # We can free up the input buffer now
         self.pipe_buffers['inputs'][buffer_id] = None
-        self.maybe_mark_step()
+        self.maybe_sync()
 
     def _exec_recv_activations(self, buffer_id):
         recvd = None

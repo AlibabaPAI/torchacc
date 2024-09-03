@@ -31,3 +31,14 @@ def fetch_gradients(optimizer):
                     if isinstance(p, torch.Tensor) and p.grad is not None:
                         gradients.append(p.grad.data)
     return gradients
+
+
+def sync(wait: bool = False):
+    """Generate a computation graph for all pending operations. Compile and
+    optimize the computation graph according to the torchacc config, and then execute it.
+
+    Args:
+        wait (bool): Wait utils the graph execution finished if True. Otherwise, execute the
+    computation graph asynchronously.
+    """
+    mark_step(wait)

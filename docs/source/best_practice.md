@@ -1,8 +1,8 @@
 # Best Practices
 
-## Minimize the Calls to `mark_step`
+## Minimize the Calls to `sync`
 
-When using `AsyncLoader`, which already contains an internal `mark_step`, additional calls to `mark_step()` are generally unnecessary and can cause redundant synchronization. In other scenarios, avoid excessive calls to `mark_step` whenever possible.
+When using `AsyncLoader`, which already contains an internal `sync`, additional calls to `sync()` are generally unnecessary and can cause redundant synchronization. In other scenarios, avoid excessive calls to `sync` whenever possible.
 
 
 ## Prefer `AsyncLoader`
@@ -18,9 +18,9 @@ Evaluating tensors can impact performance. Operations that trigger tensor evalua
 - Using tensor values in dynamic control flow for branch logic
 
 
-## Coordinate `Gradient Accumulation` with `mark_step` and `AsyncLoader`
+## Coordinate `Gradient Accumulation` with `sync` and `AsyncLoader`
 
-When using `Gradient Accumulation`, adjust the `batches_per_execution` parameter in `AsyncLoader` to match the GA minibatch count N. This ensures `mark_step` is executed once after N minibatches. Additionally, consider the memory overhead in this scenario; if it's too high, you may need to execute `mark_step` after each minibatch.
+When using `Gradient Accumulation`, adjust the `batches_per_execution` parameter in `AsyncLoader` to match the GA minibatch count N. This ensures `sync` is executed once after N minibatches. Additionally, consider the memory overhead in this scenario; if it's too high, you may need to execute `sync` after each minibatch.
 
 
 ## Model Saving

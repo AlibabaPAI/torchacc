@@ -173,7 +173,7 @@ class ContextParallelTest(MultiProcessTestBase):
         loss_fa = torch.sum(output_fa)
         loss_fa.backward()
 
-        ta.mark_step()
+        ta.sync()
 
         fwd_close = torch.allclose(
             output_fa.cpu().detach().to(torch.float32),

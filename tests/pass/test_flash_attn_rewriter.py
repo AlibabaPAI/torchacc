@@ -183,7 +183,7 @@ def test_flash_attn_rewriter(enable_tp_attention, dtype):
         loss.backward()
         opt.step()
         torch.cuda.synchronize()
-        ta.mark_step()
+        ta.sync()
 
     torch.manual_seed(101)
     device = ta.lazy_device()
@@ -202,7 +202,7 @@ def test_flash_attn_rewriter(enable_tp_attention, dtype):
         loss_fa.backward()
         opt_fa.step()
         torch.cuda.synchronize()
-        ta.mark_step()
+        ta.sync()
 
     for idx, (ret, ret_fa) in enumerate(zip(rets, rets_fa)):
         allclose_fwd = torch.allclose(

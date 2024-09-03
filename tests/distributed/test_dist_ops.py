@@ -25,7 +25,7 @@ class DistTest(MultiProcessTestBase):
             dist.send(send_tensor, 1, group=new_group)
         elif dist.get_rank() == 1:
             dist.recv(recv_tensor, 0, group=new_group)
-        ta.mark_step(wait=True)
+        ta.sync(wait=True)
         if dist.get_rank() == 1:
             assert torch.allclose(recv_tensor.to('cpu'), send_tensor.to('cpu'))
 
@@ -56,7 +56,7 @@ class DistTest(MultiProcessTestBase):
             dist.send(send_tensor, 1, group=new_group)
         elif dist.get_rank() == 1:
             dist.recv(recv_tensor, 0, group=new_group)
-        ta.mark_step()
+        ta.sync()
         if dist.get_rank() == 1:
             assert torch.allclose(recv_tensor.to('cpu'), send_tensor.to('cpu'))
 

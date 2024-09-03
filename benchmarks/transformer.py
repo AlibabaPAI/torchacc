@@ -180,7 +180,7 @@ def train_gpt(args):
                     if args.disable_loss_print:
                         loss = 0.0
                     elif args.acc:
-                        ta.mark_step()
+                        ta.sync()
                     step = step + epoch * len(train_loader)
                     time_cost = time.time() - iteration_time
                     iteration_time = time.time()

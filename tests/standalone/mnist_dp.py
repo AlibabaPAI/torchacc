@@ -53,7 +53,7 @@ def train(args, model, train_loader, optimizer, epoch, scaler):
         scaler.update()
 
         if batch_idx % args.log_interval == 0 and dist.get_rank() == 0:
-            ta.mark_step()
+            ta.sync()
             batch_time = float(time.time() - e_time) / float(args.log_interval)
             e_time = time.time()
             samples_per_step = float(args.batch_size / batch_time)

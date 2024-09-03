@@ -11,7 +11,6 @@ Below is the code for `GPT2` in Torch which training with `bfloat16`:
 
 ```python
 import torch
-import torchacc
 from datasets import load_dataset
 from tqdm import tqdm
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
@@ -52,7 +51,6 @@ for step, batch in enumerate(tqdm(train_dataloader, unit='batch')):
     optimizer.step()
     if step % 100 == 0:
         print(f'step: {step}, loss: {loss.item():.4f}')
-
 ```
 
 ## FSDP
@@ -61,7 +59,7 @@ You only need to configure the TorchAcc `Config` and pass it to the `torchacc.ac
 
 ```diff
   import torch
-  import torchacc
++ import torchacc
   from datasets import load_dataset
   from tqdm import tqdm
   from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
@@ -107,7 +105,6 @@ You only need to configure the TorchAcc `Config` and pass it to the `torchacc.ac
       optimizer.step()
       if step % 100 == 0:
           print(f'step: {step}, loss: {loss.item():.4f}')
-
 ```
 
 
