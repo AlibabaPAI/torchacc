@@ -157,3 +157,4 @@ log/
 .vscode
 
 !/torchacc/dist
+torchacc/version.py
