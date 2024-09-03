@@ -65,9 +65,8 @@ class SpmdFullyShardedDataParallel(ParallelModule):
 
         mesh = self._get_mesh((self.mesh.get_fsdp_num(), 1), None,
                               ('fsdp', 'tensor'))
-
         model = FSDPv2(
-            model.to(lazy_device()),
+            model,
             mesh,
             shard_output=self.shard_output_callable,
             auto_wrap_policy=auto_wrap_policy,
