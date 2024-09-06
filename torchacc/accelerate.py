@@ -72,7 +72,6 @@ def accelerate(
         else:
             device = torch.cuda.current_device()
         torch.cuda.set_device(device)
-        print(f"setting device to cuda:{device}")
     else:
         device = ta.lazy_device()
 
