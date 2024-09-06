@@ -1,6 +1,7 @@
 import torch
-import torch.distributed as dist
 from torch.autograd import Variable
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 import torchacc as ta
 from torchacc.dist import ParallelModule
@@ -19,7 +20,17 @@ class DataParallel(ParallelModule):
     def __init__(self, model: torch.nn.Module, config: Config, **kwargs):
         super().__init__(model, config, **kwargs)
 
-        self.model = model
+        if config.is_eager_backend():
+            # for torch DDP, we need to move the model to cuda first.
+            model = model.to(self.device)
+            self.model = DDP(
+                model,
+                device_ids=[self.device],
+                process_group=self.mesh.get_dp_proc_group())
+        else:
+            self.model = model
+        self.is_lazy_backend = config.is_lazy_backend()
+        self.is_eager_backend = config.is_eager_backend()
 
         self.dp_size = self.mesh.get_dp_num()
         self.dp_proc_group = self.mesh.get_dp_proc_group()
@@ -60,12 +71,19 @@ class DataParallel(ParallelModule):
         return outputs
 
     def _get_underlay_model(self):
+        if self.is_eager_backend:
+            return self.model.module
         return self.model
 
     def _update_underlay_model(self, model: torch.nn.Module):
+        if self.is_eager_backend:
+            raise NotImplementedError(
+                "Cannot update underlay model in DataParallel for cuda backend."
+            )
         self.model = model
 
     def forward(self, *args, **kwargs):
         outputs = self.model(*args, **kwargs)
-        outputs = self._register_pre_backward_hooks(outputs)
+        if self.is_lazy_backend:
+            outputs = self._register_pre_backward_hooks(outputs)
         return outputs

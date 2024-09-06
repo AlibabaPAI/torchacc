@@ -48,6 +48,7 @@ def _parse_args():
     parser.add_argument('--num_micro_batches', type=int, default=1)
     parser.add_argument('--num_train_epochs', type=int, default=2)
     parser.add_argument('--acc', action='store_true', default=False)
+    parser.add_argument('--backend', type=str, default='lazy')
     parser.add_argument('--fp16', action='store_true', default=False)
     parser.add_argument('--bf16', action='store_true', default=False)
     parser.add_argument('--gc', action='store_true', default=False)
@@ -74,6 +75,8 @@ def _setup_ddp(local_rank):
 
 def _get_config(args):
     config = ta.Config()
+    config.backend = args.backend
+    config.compute.acc_llama = "llama" in args.model_name.lower()
     config.compute.fp16 = args.fp16
     config.compute.bf16 = args.bf16
 
@@ -92,7 +95,8 @@ def _get_config(args):
 def _build_model_and_loader(args):
     config = AutoConfig.from_pretrained(
         args.model_name, cache_dir='./log/model_cache')
-    model = AutoModelForCausalLM.from_config(config)
+    model = AutoModelForCausalLM.from_config(
+        config, attn_implementation='flash_attention_2')
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=False)
     tokenizer.model_max_length = args.max_seq_length
@@ -153,7 +157,7 @@ def train_gpt(args):
     with tqdm.tqdm(range(args.num_train_epochs * len(train_loader))) as pbar:
         for epoch in range(args.num_train_epochs):
             for step, inputs in enumerate(train_loader):
-                if not args.acc:
+                if not args.acc or args.backend != "lazy":
                     inputs = {
                         key: value.to(args.local_rank)
                         for key, value in inputs.items()
@@ -207,7 +211,7 @@ if __name__ == '__main__':
 
     args = _parse_args()
 
-    if not args.acc:
+    if not args.acc or args.backend != "lazy":
         _setup_ddp(args.local_rank)
 
     train_gpt(args)

@@ -28,7 +28,13 @@ class DistributedParallel(ParallelModule):
                 model = fsdp_wrapper(model, self.config, **kwargs)
                 self.model._update_underlay_model(model)
 
-        if self.has_dp and not self.has_tp:
+        need_wrap_dp = False
+        if config.is_eager_backend():
+            need_wrap_dp = self.has_dp and not self.has_fsdp
+        elif config.is_lazy_backend():
+            need_wrap_dp = self.has_dp and not self.has_tp
+
+        if need_wrap_dp:
             if self.model is None:
                 self.model = DataParallel(model, self.config, **kwargs)
             else:

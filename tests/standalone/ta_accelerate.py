@@ -43,6 +43,7 @@ def main(args):
 
     # set config
     config = ta.Config()
+    config.backend = args.backend
     config.compute.fp16 = args.fp16
     config.compute.bf16 = args.bf16
 
@@ -79,7 +80,8 @@ def main(args):
         ],
         repeat_count=train_steps)
 
-    train_loader = ta.AsyncLoader(train_loader, device)
+    if config.is_lazy_backend():
+        train_loader = ta.AsyncLoader(train_loader, device)
     total_loss = torch.tensor(0.0).to(device)
     global_step = 1
     for step, data in enumerate(train_loader):
@@ -98,6 +100,8 @@ def main(args):
         else:
             with torch.cuda.amp.autocast(
                     enabled=amp_enabled, cache_enabled=True, dtype=amp_dtype):
+                data[0] = data[0].to(device)
+                data[1] = data[1].to(device)
                 loss = model(data[0])
                 loss = torch.nn.functional.nll_loss(loss, data[1])
             if scaler is not None:
@@ -139,6 +143,7 @@ if __name__ == '__main__':
     parser.add_argument("--gc", action="store_true", default=False)
     parser.add_argument("--fp16", action="store_true", default=False)
     parser.add_argument("--bf16", action="store_true", default=False)
+    parser.add_argument("--backend", type=str, default="lazy")
     args = parser.parse_args()
 
     set_seed()

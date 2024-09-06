@@ -3,6 +3,7 @@ from types import MethodType
 from typing import Dict, Optional, Set
 
 import torch
+import torch.distributed.fsdp as torch_fsdp
 import torch.fx as fx
 from torch.fx.passes.split_module import split_module
 import torch_xla.distributed.fsdp as xla_fsdp
@@ -139,11 +140,14 @@ class FullyShardedDataParallel(ParallelModule):
                 cls = utils.get_module_class_from_name(model, name)
                 assert cls, f"class {name} in fsdp.wrap_layer_cls not found in model"
                 layer_cls.add(cls)
-            auto_wrap_policy = functools.partial(
-                xla_fsdp.wrap.transformer_auto_wrap_policy,
-                # Transformer layer class to wrap
-                transformer_layer_cls=layer_cls,
-            )
+            if config.is_eager_backend():
+                auto_wrap_policy = torch_fsdp.wrap.ModuleWrapPolicy(layer_cls)
+            else:
+                auto_wrap_policy = functools.partial(
+                    xla_fsdp.wrap.transformer_auto_wrap_policy,
+                    # Transformer layer class to wrap
+                    transformer_layer_cls=layer_cls,
+                )
 
         dtype = torch.float32
         if config.compute.fp16:
@@ -178,19 +182,41 @@ class FullyShardedDataParallel(ParallelModule):
                     gc_cnt -= 1
                 return xla_fsdp.XlaFullyShardedDataParallel(m, *args, **kwargs)
 
-        model = xla_fsdp.XlaFullyShardedDataParallel(
-            model,
-            flatten_parameters=config.dist.fsdp.flatten_parameters,
-            sync_module_states=config.dist.fsdp.sync_module_states,
-            opt_flatten_overlap=True,
-            pin_layout_in_collective_ops=False,
-            auto_wrap_policy=auto_wrap_policy,
-            auto_wrapper_callable=auto_wrapper_callable,
-            compute_dtype=dtype,
-            buffer_dtype=dtype,
-            sharding_groups=self.mesh.get_fsdp_rank_groups(),
-            sharding_rank=self.mesh.get_fsdp_rank(),
-            sharding_world_size=self.mesh.get_fsdp_num())
+        if config.is_eager_backend():
+            if config.dist.dp.size > 1:
+                process_group = (self.mesh.get_fsdp_proc_group(),
+                                 self.mesh.get_dp_proc_group())
+                sharding_strategy = torch_fsdp.ShardingStrategy.HYBRID_SHARD
+            else:
+                process_group = self.mesh.get_fsdp_proc_group()
+                sharding_strategy = torch_fsdp.ShardingStrategy.FULL_SHARD
+            mixed_precision = torch_fsdp.MixedPrecision(
+                param_dtype=dtype,
+                reduce_dtype=torch.float32,
+                buffer_dtype=torch.float32,
+            )
+            model = torch_fsdp.FullyShardedDataParallel(
+                model,
+                process_group=process_group,
+                sharding_strategy=sharding_strategy,
+                auto_wrap_policy=auto_wrap_policy,
+                mixed_precision=mixed_precision,
+                device_id=torch.cuda.current_device(),
+                sync_module_states=config.dist.fsdp.sync_module_states)
+        else:
+            model = xla_fsdp.XlaFullyShardedDataParallel(
+                model,
+                flatten_parameters=config.dist.fsdp.flatten_parameters,
+                sync_module_states=config.dist.fsdp.sync_module_states,
+                opt_flatten_overlap=True,
+                pin_layout_in_collective_ops=False,
+                auto_wrap_policy=auto_wrap_policy,
+                auto_wrapper_callable=auto_wrapper_callable,
+                compute_dtype=dtype,
+                buffer_dtype=dtype,
+                sharding_groups=self.mesh.get_fsdp_rank_groups(),
+                sharding_rank=self.mesh.get_fsdp_rank(),
+                sharding_world_size=self.mesh.get_fsdp_num())
         return model
 
     def clip_grad_norm_(self, max_grad_norm):

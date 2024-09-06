@@ -19,7 +19,8 @@ class ParallelModule(torch.nn.Module, ABC):
         config.validate()
 
         self._config = config
-        self._device = lazy_device()
+        self._device = lazy_device() if config.is_lazy_backend(
+        ) else torch.cuda.current_device()
 
         self.mesh = self._config.get_mesh()
         self.global_rank = self.mesh.get_global_rank()

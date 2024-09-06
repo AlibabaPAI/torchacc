@@ -33,6 +33,7 @@ class ComputeConfig(BaseConfig):
     fp16: bool = False
     bf16: bool = False
     acc_scaled_dot_attn: bool = False
+    acc_llama: bool = False
 
     def validate(self):
         assert isinstance(self.fp16,
@@ -322,6 +323,7 @@ class Config(BaseConfig):
     """Configuration for TorchAcc
 
     Args:
+        backend (str): Backend used for acceleration. Options: 'lazy', 'eager'.
         compute (ComputeConfig): Configuration for computational optimization.
         memory (MemoryConfig): Configuration for memory optimization.
         dist (DistConfig): Configuration for distributed parallel.
@@ -329,12 +331,15 @@ class Config(BaseConfig):
             by get_mesh().
         dataloader (DataLoaderConfig): Configuration for data loader optimization.
     """
+    backend: str = 'lazy'
     compute: ComputeConfig = field(default_factory=ComputeConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     dist: DistConfig = field(default_factory=DistConfig)
     dataloader: DataLoaderConfig = field(default_factory=DataLoaderConfig)
 
     def validate(self):
+        assert isinstance(self.backend,
+                          str), "Config.backend should be of str type"
         assert isinstance(
             self.compute,
             ComputeConfig), "Config.compute should be of ComputeConfig type"
@@ -346,6 +351,9 @@ class Config(BaseConfig):
         ), "Config.dataloader should be of DataLoaderConfig type"
         assert isinstance(
             self.dist, DistConfig), "Config.dist should be of DistConfig type"
+
+        assert self.backend in ['lazy', 'eager'
+                               ], "Config.backend should be 'lazy' or 'eager'"
 
         self.compute.validate()
         self.memory.validate()
@@ -359,12 +367,7 @@ class Config(BaseConfig):
         if hasattr(self, "_mesh"):
             return self._mesh
         self.validate()
-        if dist.is_initialized():
-            assert dist.get_backend() == ta.dist.BACKEND_NAME, "The backend for initializing the distributed" \
-                f" process group should be {ta.dist.BACKEND_NAME}."
-        else:
-            dist.init_process_group(backend=ta.dist.BACKEND_NAME)
-            dist.barrier()
+        ta.dist.init_process_group(self)
         self._mesh = ta.dist.Mesh(
             dp_num=self.dist.dp.size,
             pp_num=self.dist.pp.size,
@@ -392,3 +395,13 @@ class Config(BaseConfig):
            Currently only pipeline parallelism will enable tracing.
         """
         return self.dist.pp.size > 1
+
+    def is_lazy_backend(self):
+        """Whether lazy backend is enabled.
+        """
+        return self.backend == 'lazy'
+
+    def is_eager_backend(self):
+        """Whether eager backend is enabled.
+        """
+        return self.backend == 'eager'
