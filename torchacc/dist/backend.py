@@ -10,6 +10,7 @@ import torch_xla.core.xla_model as xm
 from torchacc.utils.logger import logger
 
 _BACKEND_NAME = 'lazy'
+_EAGER_BACKEND_NAME = 'nccl'
 
 # Note [Preserve send tensor]
 # Save the output tensors of send to preserve send op in the

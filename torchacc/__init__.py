@@ -1,7 +1,6 @@
 import os
 from dataclasses import dataclass, field
 
-import torch
 from torch_xla.amp import syncfree
 
 from . import dist, ops
@@ -117,5 +116,5 @@ def _set_env():
 
 
 patch.patch_fa()
-decompose.replace_decompose()
+# decompose.replace_decompose()
 _set_env()

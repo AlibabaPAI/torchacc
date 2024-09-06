@@ -42,7 +42,14 @@ function run_tests {
 
 
 # BF16 Tests
-run_tests "bf16"
+# run_tests "bf16"
 
 # FP16 Tests
-run_tests "fp16"
+# run_tests "fp16"
+
+# export TF_CPP_MIN_LOG_LEVEL=0
+# export TF_CPP_VMODULE=bfc_allocator=10
+rm -rf log/profile/*
+# torchrun --nproc_per_node=8 $FILE_NAME --bf16 --acc --fsdp_size=8 --dp_size=1 --batch_size 1 --max_seq_length 4096 --profile --model_name "../../AlibabaPAI/transformers/examples/pytorch/torchacc/llama3/Meta-Llama-3-8B" --model_block "LlamaDecoderLayer" --backend "eager" 
+export CUDA_VISIBLE_DEVICES=4,5
+torchrun --nproc_per_node=2 $FILE_NAME --bf16 --acc --fsdp_size=2 --dp_size=1 --batch_size 2 --profile
