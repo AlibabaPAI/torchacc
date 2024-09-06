@@ -27,8 +27,10 @@ class ComputeConfig(BaseConfig):
     Args:
         fp16 (bool): Whether it is the data type of fp16.
         bf16 (bool): Whether it is the data type of bf16.
-        acc_scaled_dot_attn (bool): Whether torch.nn.functional.scaled_dot_product_attention should be
-            replaced with the torchacc version of flash attention.
+        acc_scaled_dot_attn (bool): Whether torch.nn.functional.scaled_dot_product_attention
+            should be replaced with the torchacc version of flash attention.
+        acc_llama (bool): Whether the memory intensive operations of
+            llama will be replaced with the liger kernels.
     """
     fp16: bool = False
     bf16: bool = False
@@ -43,6 +45,9 @@ class ComputeConfig(BaseConfig):
         assert isinstance(
             self.acc_scaled_dot_attn,
             bool), "ComputeConfig.acc_scaled_dot_attn should be of bool type"
+        assert isinstance(
+            self.acc_llama,
+            bool), "ComputeConfig.acc_llama should be of bool type"
         if self.fp16 and self.bf16:
             raise ValueError(f"fp16 and bf16 cannot both be True")
 
@@ -359,6 +364,9 @@ class Config(BaseConfig):
         self.memory.validate()
         self.dataloader.validate()
         self.dist.validate()
+
+        if self.compute.acc_llama and self.is_lazy_backend():
+            raise ValueError("compute.acc_llama only support eager backend")
 
     def get_mesh(self):
         """Get the distributed communication component Mesh. Mesh defines the individual communication

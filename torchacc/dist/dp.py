@@ -78,7 +78,7 @@ class DataParallel(ParallelModule):
     def _update_underlay_model(self, model: torch.nn.Module):
         if self.is_eager_backend:
             raise NotImplementedError(
-                "Cannot update underlay model in DataParallel for cuda backend."
+                "Cannot update underlay model in DataParallel for eager backend."
             )
         self.model = model
 
