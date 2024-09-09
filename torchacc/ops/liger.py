@@ -2,7 +2,8 @@ import importlib.util
 
 import torch
 
-if importlib.util.find_spec("liger_kernel") is not None:
+IS_LIGER_KERNEL_AVAILABLE = importlib.util.find_spec("liger_kernel") is not None
+if IS_LIGER_KERNEL_AVAILABLE:
     from liger_kernel.ops.rms_norm import LigerRMSNormFunction
     from liger_kernel.ops.swiglu import LigerSiLUMulFunction
     from liger_kernel.transformers.cross_entropy import LigerCrossEntropyLoss
@@ -56,6 +57,10 @@ def apply_liger_kernel_to_llama(
         rms_norm (bool): Whether to apply Liger's RMSNorm. Default is True.
         swiglu (bool): Whether to apply Liger's SwiGLU MLP. Default is True.
     """
+    if not IS_LIGER_KERNEL_AVAILABLE:
+        raise ImportError(
+            "Liger kernel is not available. Please install it by running `pip install liger-kernel`."
+        )
     assert not (
         cross_entropy and fused_linear_cross_entropy
     ), "cross_entropy and fused_linear_cross_entropy cannot both be True."
@@ -76,6 +81,7 @@ def apply_liger_kernel_to_llama(
         modeling_llama.LlamaMLP.forward = mlp_forward
 
 
+# Below is adapted from liger_kernel.transformers.apply_liger_kernel_to_qwen2
 def apply_liger_kernel_to_qwen2(
     rope: bool = True,
     cross_entropy: bool = False,
@@ -96,6 +102,10 @@ def apply_liger_kernel_to_qwen2(
         rms_norm (bool): Whether to apply Liger's RMSNorm. Default is True.
         swiglu (bool): Whether to apply Liger's SwiGLU MLP. Default is True.
     """
+    if not IS_LIGER_KERNEL_AVAILABLE:
+        raise ImportError(
+            "Liger kernel is not available. Please install it by running `pip install liger-kernel`."
+        )
     assert not (
         cross_entropy and fused_linear_cross_entropy
     ), "cross_entropy and fused_linear_cross_entropy cannot both be True."
