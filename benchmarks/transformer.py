@@ -157,7 +157,7 @@ def train_gpt(args):
     with tqdm.tqdm(range(args.num_train_epochs * len(train_loader))) as pbar:
         for epoch in range(args.num_train_epochs):
             for step, inputs in enumerate(train_loader):
-                if not args.acc or args.backend != "lazy":
+                if not args.acc:
                     inputs = {
                         key: value.to(args.local_rank)
                         for key, value in inputs.items()

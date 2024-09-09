@@ -75,7 +75,7 @@ def accelerate(
     else:
         device = ta.lazy_device()
 
-    if dataloader and config.is_lazy_backend():
+    if dataloader:
         dataloader = ta.AsyncLoader(
             dataloader,
             device,
@@ -90,6 +90,9 @@ def accelerate(
 
     if config.compute.acc_llama:
         ta.ops.apply_liger_kernel_to_llama()
+
+    if config.compute.acc_qwen2:
+        ta.ops.apply_liger_kernel_to_qwen2()
 
     # replace the optimizer and grad scaler with the syncfree optimizer and the torchacc grad scaler
     if config.compute.fp16 and config.is_lazy_backend():
