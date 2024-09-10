@@ -3,22 +3,10 @@ import importlib.util
 import torch
 
 IS_LIGER_KERNEL_AVAILABLE = importlib.util.find_spec("liger_kernel") is not None
-if IS_LIGER_KERNEL_AVAILABLE:
-    from liger_kernel.ops.rms_norm import LigerRMSNormFunction
-    from liger_kernel.ops.swiglu import LigerSiLUMulFunction
-    from liger_kernel.transformers.cross_entropy import LigerCrossEntropyLoss
-    from liger_kernel.transformers.model.llama import \
-        lce_forward as llama_lce_forward
-    from liger_kernel.transformers.model.qwen2 import \
-        lce_forward as qwen2_lce_forward
-    from liger_kernel.transformers.rope import liger_rotary_pos_emb
-
-if importlib.util.find_spec("transformers") is not None:
-    from transformers.models.llama import modeling_llama
-    from transformers.models.qwen2 import modeling_qwen2
 
 
 def rms_forward(self, hidden_states, offset=0.0, casting_mode="llama"):
+    from liger_kernel.ops.rms_norm import LigerRMSNormFunction
     return LigerRMSNormFunction.apply(
         hidden_states,
         self.weight,
@@ -32,6 +20,8 @@ def mlp_forward(self, x):
     if not isinstance(self.act_fn, torch.nn.SiLU):
         # if self.config.hidden_act not in ["silu", "swish"]:
         raise ValueError(f"Activation function {self.act_fn} not supported.")
+
+    from liger_kernel.ops.swiglu import LigerSiLUMulFunction
     return self.down_proj(
         LigerSiLUMulFunction.apply(self.gate_proj(x), self.up_proj(x)))
 
@@ -53,7 +43,8 @@ def apply_liger_kernel_to_llama(
         fused_linear_cross_entropy (bool):
             Whether to apply Liger's fused linear cross entropy loss. Default is True.
             `cross_entropy` and `fused_linear_cross_entropy` cannot both be True.
-            If `fused_linear_cross_entropy` is True, the logits will not be materialized but more memory efficient.
+            If `fused_linear_cross_entropy` is True, the logits will not be materialized but
+            more memory efficient.
         rms_norm (bool): Whether to apply Liger's RMSNorm. Default is True.
         swiglu (bool): Whether to apply Liger's SwiGLU MLP. Default is True.
     """
@@ -64,6 +55,14 @@ def apply_liger_kernel_to_llama(
     assert not (
         cross_entropy and fused_linear_cross_entropy
     ), "cross_entropy and fused_linear_cross_entropy cannot both be True."
+
+    # Note: We cannot import liger_kernel in advance because liger_kernel will import transformers,
+    # causing some patches (such as FA) to become ineffective.
+    from liger_kernel.transformers.cross_entropy import LigerCrossEntropyLoss
+    from liger_kernel.transformers.model.llama import \
+        lce_forward as llama_lce_forward
+    from liger_kernel.transformers.rope import liger_rotary_pos_emb
+    from transformers.models.llama import modeling_llama
 
     if rope:
         modeling_llama.apply_rotary_pos_emb = liger_rotary_pos_emb
@@ -98,7 +97,8 @@ def apply_liger_kernel_to_qwen2(
         fused_linear_cross_entropy (bool):
             Whether to apply Liger's fused linear cross entropy loss. Default is True.
             `cross_entropy` and `fused_linear_cross_entropy` cannot both be True.
-            If `fused_linear_cross_entropy` is True, the logits will not be materialized but more memory efficient.
+            If `fused_linear_cross_entropy` is True, the logits will not be materialized but
+            more memory efficient.
         rms_norm (bool): Whether to apply Liger's RMSNorm. Default is True.
         swiglu (bool): Whether to apply Liger's SwiGLU MLP. Default is True.
     """
@@ -109,6 +109,12 @@ def apply_liger_kernel_to_qwen2(
     assert not (
         cross_entropy and fused_linear_cross_entropy
     ), "cross_entropy and fused_linear_cross_entropy cannot both be True."
+
+    from liger_kernel.transformers.cross_entropy import LigerCrossEntropyLoss
+    from liger_kernel.transformers.model.qwen2 import \
+        lce_forward as qwen2_lce_forward
+    from liger_kernel.transformers.rope import liger_rotary_pos_emb
+    from transformers.models.qwen2 import modeling_qwen2
 
     if rope:
         modeling_qwen2.apply_rotary_pos_emb = liger_rotary_pos_emb

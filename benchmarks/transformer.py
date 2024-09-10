@@ -52,6 +52,7 @@ def _parse_args():
     parser.add_argument('--fp16', action='store_true', default=False)
     parser.add_argument('--bf16', action='store_true', default=False)
     parser.add_argument('--gc', action='store_true', default=False)
+    parser.add_argument('--use_flash_attn', action='store_true', default=False)
     parser.add_argument('--profile', action='store_true', default=False)
     parser.add_argument(
         '--disable_loss_print', action='store_true', default=False)
@@ -76,7 +77,8 @@ def _setup_ddp(local_rank):
 def _get_config(args):
     config = ta.Config()
     config.backend = args.backend
-    config.compute.acc_llama = "llama" in args.model_name.lower()
+    config.compute.acc_llama = "llama" in args.model_name.lower(
+    ) and args.backend != 'lazy'
     config.compute.fp16 = args.fp16
     config.compute.bf16 = args.bf16
 
@@ -95,8 +97,11 @@ def _get_config(args):
 def _build_model_and_loader(args):
     config = AutoConfig.from_pretrained(
         args.model_name, cache_dir='./log/model_cache')
-    model = AutoModelForCausalLM.from_config(
-        config, attn_implementation='flash_attention_2')
+    if args.use_flash_attn:
+        model = AutoModelForCausalLM.from_config(
+            config, attn_implementation='flash_attention_2')
+    else:
+        model = AutoModelForCausalLM.from_config(config)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=False)
     tokenizer.model_max_length = args.max_seq_length
