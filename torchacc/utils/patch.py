@@ -59,16 +59,16 @@ def patch_fa():
     `torchacc.ops.flash_attn_xla` and `torchacc.ops.flash_attn_varlen_xla`,
     and dynamically determine which one to use at runtime based on the input device.
     '''
-    try:
-        import flash_attn
-        if hasattr(flash_attn.flash_attn_func, '__orig'):
-            return
-        flash_attn.flash_attn_func = _choose_functions(
-            flash_attn.flash_attn_func, ops.flash_attn_xla)
-        # flash_attn.flash_attn_varlen_func = _choose_functions(
-        #     flash_attn.flash_attn_varlen_func, ops.flash_attn_varlen_xla)
-    except ImportError:
-        logger.warn(f"Patch flash_attn failed.")
+    from transformers.models.llama.modeling_llama import LlamaFlashAttention2
+    def _flash_attention_forward(
+        self, query_states, key_states, value_states, attention_mask, query_length, dropout=0.0, softmax_scale=None
+    ):
+        if attention_mask is not None:
+            return ops.flash_attn_varlen_xla(query_states.contiguous(), key_states.contiguous(), value_states.contiguous(), attention_mask=attention_mask.contiguous(), dropout_p=dropout, softmax_scale=softmax_scale)
+        else:
+            return ops.flash_attn_xla(query_states, key_states, value_states, dropout_p=dropout, softmax_scale=softmax_scale)
+
+    LlamaFlashAttention2._flash_attention_forward = _flash_attention_forward
 
 
 def patch_llama(use_flash_attn):
@@ -89,6 +89,8 @@ def patch_llama(use_flash_attn):
             past_key_values: Cache,
             output_attentions: bool,
         ):
+            if attention_mask is not None:
+                return attention_mask
             return None
 
         LlamaModel._update_causal_mask = update_causal_mask

@@ -171,10 +171,14 @@ class FlashAttnVarlenXla(torch.autograd.Function):
             softmax_scale = q.shape[-1]**(-0.5)
         assert isinstance(window_size, tuple) and len(window_size) == 2
 
+        maybe_contiguous = lambda x: x.contiguous() if x.stride(-1) != 1 else x
+        q, k, v = [maybe_contiguous(x) for x in (q, k, v)]
+
         softmax_lse, out, rng_state, cu_seqlens_q, cu_seqlens_k = torch_xla._XLAC._flash_attention_forward(
             q, k, v, attention_mask, alibi_slopes, dropout_p, softmax_scale, False, causal,
             window_size[0], window_size[1], return_softmax, None)
         out = out.to(q.dtype)
+
         ctx.save_for_backward(q, k, v, out, softmax_lse, cu_seqlens_q,
                               cu_seqlens_k, rng_state)
         ctx.dropout_p = dropout_p
@@ -189,6 +193,8 @@ class FlashAttnVarlenXla(torch.autograd.Function):
     def backward(ctx, dout, *args):
         q, k, v, out, softmax_lse, cu_seqlens_q, cu_seqlens_k, rng_state = ctx.saved_tensors
 
+        maybe_contiguous = lambda x: x.contiguous() if x.stride(-1) != 1 else x
+        dout, q, k, v, out = [maybe_contiguous(x) for x in (dout, q, k, v, out)]
         dq, dk, dv, softmax_d = torch_xla._XLAC._flash_attention_backward(
             dout, q, k, v, out, softmax_lse, cu_seqlens_q, cu_seqlens_k,
             ctx.alibi_slopes, ctx.dropout_p,
@@ -198,6 +204,7 @@ class FlashAttnVarlenXla(torch.autograd.Function):
         dq = dq[..., :dout.shape[-1]]  # We could have padded the head dimension
         dk = dk[..., :dout.shape[-1]]
         dv = dv[..., :dout.shape[-1]]
+
         return dq, dk, dv, None, None, None, None, None, None, None, None, None, None, None
 
 
@@ -217,7 +224,7 @@ class FlashAttnXla(torch.autograd.Function):
             dropout_p, softmax_scale, False, causal, window_size[0],
             window_size[1], return_softmax, None)
         out = out.to(q.dtype)
-        
+
         ctx.save_for_backward(q, k, v, out, softmax_lse, rng_state)
         ctx.dropout_p = dropout_p
         ctx.softmax_scale = softmax_scale
@@ -327,6 +334,8 @@ def flash_attn_varlen_xla(
 ):
     assert q.dtype in [torch.bfloat16,
                        torch.float16], 'flash attention only supports fp16/bf16'
+    if attention_mask.dtype != torch.int32:
+        attention_mask.to(torch.in32)
     return FlashAttnVarlenXla.apply(
         q,
         k,
