@@ -12,7 +12,7 @@ If you want to build from source, you first need to build PyTorch and torch_xla 
 ```shell
 git clone --recursive -b v2.3.0 git@github.com:AlibabaPAI/pytorch.git
 cd pytorch
-TORCH_CUDA_ARCH_LIST="8.0" TF_CUDA_COMPUTE_CAPABILITIES="8.0" python setup.py develop
+python setup.py develop
 ```
 
 
@@ -20,10 +20,15 @@ TORCH_CUDA_ARCH_LIST="8.0" TF_CUDA_COMPUTE_CAPABILITIES="8.0" python setup.py de
 ```shell
 git clone --recursive -b acc git@github.com:AlibabaPAI/xla.git
 cd xla
-TORCH_CUDA_ARCH_LIST="8.0" TF_CUDA_COMPUTE_CAPABILITIES="8.0" USE_CUDA=1 XLA_CUDA=1 python setup.py develop
+USE_CUDA=1 XLA_CUDA=1 python setup.py develop
 ```
 
 3. build torchacc
 ```shell
 python setup.py develop
+```
+
+4. UT
+```
+sh tests/run_ut.sh
 ```

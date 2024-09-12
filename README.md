@@ -41,25 +41,9 @@ sudo docker run  --gpus all --net host --ipc host --shm-size 10G -it --rm --cap-
 ```
 
 ### Build from source
-1. Requirements
-```
-torch==2.3.0
-torch_xla==2.3.0
-transformers>=4.41.2
-```
-Note: you should use the alibabapai/torch and alibabapai/xla to ensure GPU compatibility and performance.
+
 see the [contribution guide](docs/source/contributing.md).
 
-
-2. Build
-```
-python setup.py install
-```
-
-3. UT
-```
-sh tests/run_ut.sh
-```
 
 ## LLMs training examples
 
