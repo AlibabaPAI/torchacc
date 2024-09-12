@@ -59,7 +59,7 @@ def init_comm(config: ta.Config) -> None:
             dist.recv(tmp, src_rank)
         # Execute the above computation graph first to ensure that the execution order of send/recv
         # does not interfere with the subsequent all reduce operations.
-        ta.mark_step()
+        ta.sync()
 
         if torch_xla.runtime.is_spmd():
             # Initialize the communication for collective operations (such as collective permute, all reduce) to
@@ -74,7 +74,7 @@ def init_comm(config: ta.Config) -> None:
             c = torch.einsum('ij,jk->ik', a, b)
             # SPMD will insert all reduce here
             ta.dist.tp.mark_sharding(c, tp_mesh, (None, None))
-            ta.mark_step()
+            ta.sync()
 
     _COMMUNICATION_INITED = True
 

@@ -163,10 +163,10 @@ def main(args):
             optimizer.zero_grad()
             if ta.dist.local_rank() == 0:
                 if global_step % steps_per_print == 0:
-                    ta.mark_step()
+                    ta.sync()
                     print(f"step: {global_step}, loss: {total_loss}")
             if global_step == train_steps:
-                ta.mark_step()
+                ta.sync()
                 return
             global_step += 1
             total_loss.zero_()

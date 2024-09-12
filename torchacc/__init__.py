@@ -8,7 +8,7 @@ from . import dist, ops
 from .config import Config
 from .core import (AsyncLoader, amp, fetch_gradients, is_lazy_device,
                    is_lazy_tensor, lazy_device, mark_step, save,
-                   send_cpu_data_to_device)
+                   send_cpu_data_to_device, sync)
 from .core.accelerate_hf_trainer import accelerate_hf_trainer
 from .llm.qwen_patch import patch_qwen_model
 from .utils import decompose, patch

@@ -181,7 +181,7 @@ def test_flash_attn_varlen_output(seqlen_q, seqlen_k, d, dropout_p, causal,
         dk_xla,
         dv_xla,
     ) = torch.autograd.grad(out_xla, (q, k, v), g)
-    ta.mark_step(wait=True)
+    ta.sync(wait=True)
     dq_xla = dq_xla.cpu().detach()
     dk_xla = dk_xla.cpu().detach()
     dv_xla = dv_xla.cpu().detach()
