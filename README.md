@@ -6,12 +6,10 @@
 
 **TorchAcc** is an AI training acceleration framework developed by Alibaba Cloud’s PAI.
 
-TorchAcc is built on [PyTorch/XLA](https://github.com/pytorch/xla) and provides an easy-to-use interface to accelerate the training of PyTorch models. At the same time, TorchAcc has implemented extensive optimizations for distributed training, memory management, and computation specifically for GPUs, ultimately achieving improved ease of use, better GPU training performance, and enhanced scalability for distributed systems.
+TorchAcc is built on [PyTorch/XLA](https://github.com/pytorch/xla) and provides an easy-to-use interface to accelerate the training of PyTorch models. At the same time, TorchAcc has implemented extensive optimizations for distributed training, memory management, and computation specifically for GPUs, ultimately achieving improved ease of use, better GPU training performance, and enhanced scalability for distributed training.
 
 
 ## Highlighted Features
-
-The key features of TorchAcc:
 
 * Rich distributed Parallelism
     * Data Parallelism
@@ -21,13 +19,21 @@ The key features of TorchAcc:
     * Context Parallelism
       * [Ulysess](https://arxiv.org/abs/2309.14509)
       * [Ring Attention](https://arxiv.org/abs/2310.01889)
-      * Flash Sequence (Solution for Long Sequence)
+      * FlashSequence (2D Sequence Parallelism)
 * Low Memory Cost
 * High Performance
-* Ease use
+* Easy-to-use API
+
+  You can accelerate your transformer models with just a few lines of code using TorchAcc.
+
+<p align="center">
+  <img width="80%" src=docs/figures/api.gif />
+</p>
+
 
 ## Architecture Overview
-The main goal of TorchAcc is to create a high-performance AI training framework. It utilizes IR abstractions at different layers and employs static graph compilation optimization like XLA and dynamic graph compilation optimization like BladeDISC, as well as distributed optimization techniques, to offer a comprehensive end-to-end optimization solution from the underlying operators to the upper-level models.
+The main goal of TorchAcc is to provide a high-performance AI training framework.
+It utilizes IR abstractions at different layers and employs static graph compilation optimization like XLA and dynamic graph compilation optimization like BladeDISC, as well as distributed optimization techniques, to offer a comprehensive end-to-end optimization solution from the underlying operators to the upper-level models.
 
 
 <p align="center">
@@ -48,14 +54,24 @@ see the [contribution guide](docs/source/contributing.md).
 
 
 ## LLMs training examples
-
-### Use LLMs acceleration libray FlashModels
-https://github.com/AlibabaPAI/FlashModels
+requiremnets:
+```
+transformers>=4.41.2
+```
 
 ### Getting Started with huggingface Transformers
 ```
 torchrun --nproc_per_node=4 benchmarks/transformer.py --bf16 --acc --disable_loss_print --fsdp_size=4 --gc
 ```
+
+### SFT with LLMs acceleration library FlashModels
+https://github.com/AlibabaPAI/FlashModels
+
+### PEFT using modelscope/swift
+coming soon..
+
+## Contributing
+see the [contribution guide](docs/source/contributing.md).
 
 ## License
 [Apache License 2.0](LICENSE)
