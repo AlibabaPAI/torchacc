@@ -47,6 +47,12 @@ Welcome to PAI-TorchAcc's documentation!
 
    apis/modules
 
+.. toctree::
+   :maxdepth: 2
+   :caption: CONTRIBUTING
+
+   contributing
+
 Indices and tables
 ==================
 
