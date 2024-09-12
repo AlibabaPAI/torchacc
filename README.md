@@ -1,4 +1,6 @@
-# TorchAcc
+[![docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://torchacc.readthedocs.io/en/latest/)
+[![GLT CI](https://github.com/alibabapai/torchacc/actions/workflows/unit_test.yml/badge.svg)](https://github.com/alibabapai/torchacc/actions)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/alibabapai/torchacc/blob/main/LICENSE)
 
 **TorchAcc** is a PyTorch distributed training acceleration framework provided by Alibaba Cloud's PAI platform.
 
@@ -13,9 +15,10 @@ The key features of TorchAcc:
     * Fully Sharded Data Parallelism
     * Tensor Parallelism
     * Pipeline Parallelism
-    * [Ulysess](https://arxiv.org/abs/2309.14509)
-    * [Ring Attention](https://arxiv.org/abs/2310.01889)
-    * Flash Sequence (Solution for Long Sequence)
+    * Context Parallelism
+      * [Ulysess](https://arxiv.org/abs/2309.14509)
+      * [Ring Attention](https://arxiv.org/abs/2310.01889)
+      * Flash Sequence (Solution for Long Sequence)
 * Low Memory Cost
 * High Performance
 * Ease use
@@ -32,6 +35,9 @@ python setup.py install
 ```
 sh tests/run_ut.sh
 ```
+
+## LLMs training examples
+https://github.com/AlibabaPAI/FlashModels
 
 ## License
 [Apache License 2.0](LICENSE)
