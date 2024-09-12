@@ -2,6 +2,8 @@
 [![CI](https://github.com/alibabapai/torchacc/actions/workflows/unit_test.yml/badge.svg)](https://github.com/alibabapai/torchacc/actions)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/alibabapai/torchacc/blob/main/LICENSE)
 
+# TorchAcc
+
 **TorchAcc** is an AI training acceleration framework developed by Alibaba Cloud’s PAI.
 
 TorchAcc is built on [PyTorch/XLA](https://github.com/pytorch/xla) and provides an easy-to-use interface to accelerate the training of PyTorch models. At the same time, TorchAcc has implemented extensive optimizations for distributed training, memory management, and computation specifically for GPUs, ultimately achieving improved ease of use, better GPU training performance, and enhanced scalability for distributed systems.
