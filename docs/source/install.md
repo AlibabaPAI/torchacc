@@ -5,7 +5,7 @@
 It is recommended to use the existing release image directly. The image address is:
 
 ```bash
-registry.<region>.aliyuncs.com/pai-dlc/acc:r2.3.0-cuda12.1.0-py3.10-nightly
+registry.<region>.aliyuncs.com/pai-dlc/acc:r2.3.0-cuda12.1.0-py3.10
 ```
 
 Replace `<region>` with one of the following as needed:

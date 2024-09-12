@@ -54,24 +54,31 @@ see the [contribution guide](docs/source/contributing.md).
 
 
 ## LLMs training examples
-requiremnets:
-```
-transformers>=4.41.2
-```
 
-### Getting Started with huggingface Transformers
-```
+### Getting Started
+
+We present a straightforward example for training a Transformer model using TorchAcc, illustrating the usage of the TorchAcc API.
+You can quickly initiate training a Transformer model with TorchAcc by executing the following command:
+``` shell
 torchrun --nproc_per_node=4 benchmarks/transformer.py --bf16 --acc --disable_loss_print --fsdp_size=4 --gc
 ```
 
-### SFT with LLMs acceleration library FlashModels
+### Utilizing HuggingFace Transformers
+
+If you are familiar with HuggingFace Transformers's Trainer, you can easily accelerate a Transformer model using TorchAcc, see the [huggingface transformers](docs/source/tutorials/hf_transformers.md)
+
+### LLMs training acceleration with FlashModels
+
+If you want to try the latest features of Torchacc or want to use the TorchAcc interface more flexibly for model acceleration, you can use our LLM acceleration library, FlashModels. It integrates various distributed implementations of commonly used open-source LLM models and provides a wealth of examples.
+
 https://github.com/AlibabaPAI/FlashModels
 
-### PEFT using modelscope/swift
+### SFT using modelscope/swift
 coming soon..
 
 ## Contributing
 see the [contribution guide](docs/source/contributing.md).
+
 
 ## License
 [Apache License 2.0](LICENSE)
