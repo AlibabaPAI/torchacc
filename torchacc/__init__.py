@@ -12,6 +12,7 @@ from .core import (AsyncLoader, amp, fetch_gradients, is_lazy_device,
 from .core.accelerate_hf_trainer import accelerate_hf_trainer
 from .llm.qwen_patch import patch_qwen_model
 from .utils import decompose, patch
+from .version import __version__
 
 from .accelerate import accelerate  # isort: skip
 
@@ -118,5 +119,3 @@ def _set_env():
 patch.patch_fa()
 decompose.replace_decompose()
 _set_env()
-
-version = '2.3.0'
