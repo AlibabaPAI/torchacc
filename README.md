@@ -1,5 +1,5 @@
 [![docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://torchacc.readthedocs.io/en/latest/)
-[![GLT CI](https://github.com/alibabapai/torchacc/actions/workflows/unit_test.yml/badge.svg)](https://github.com/alibabapai/torchacc/actions)
+[![CI](https://github.com/alibabapai/torchacc/actions/workflows/unit_test.yml/badge.svg)](https://github.com/alibabapai/torchacc/actions)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/alibabapai/torchacc/blob/main/LICENSE)
 
 **TorchAcc** is a PyTorch distributed training acceleration framework provided by Alibaba Cloud's PAI platform.
