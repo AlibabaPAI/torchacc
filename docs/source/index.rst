@@ -1,9 +1,9 @@
-.. PAI-TorchAcc documentation master file, created by
+.. TorchAcc documentation master file, created by
    sphinx-quickstart on Fri Nov  3 16:11:35 2023.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to PAI-TorchAcc's documentation!
+Welcome to TorchAcc's documentation!
 ========================================
 
 .. toctree::
