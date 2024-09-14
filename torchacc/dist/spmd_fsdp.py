@@ -49,6 +49,12 @@ class SpmdFullyShardedDataParallel(ParallelModule):
             transformer_layer_cls=layer_cls,
         )
 
+        dtype = torch.float32
+        if config.compute.fp16:
+            dtype = torch.float16
+        if config.compute.bf16:
+            dtype = torch.bfloat16
+
         auto_wrapper_callable = None
         if config.memory.gc and (config.memory.gc_cls
                                  == config.dist.fsdp.wrap_layer_cls):
@@ -69,6 +75,7 @@ class SpmdFullyShardedDataParallel(ParallelModule):
             model,
             mesh,
             shard_output=self.shard_output_callable,
+            compute_dtype=dtype,
             auto_wrap_policy=auto_wrap_policy,
             auto_wrapper_callable=auto_wrapper_callable)
         return model
