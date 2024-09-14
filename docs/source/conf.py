@@ -9,7 +9,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 import datetime
 
-project = 'PAI-TorchAcc'
+project = 'TorchAcc'
 copyright = '2024, alibaba-cloud'
 author = 'Alibaba Cloud'
 release = '2.3.0'
