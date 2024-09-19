@@ -6,6 +6,7 @@ from torch_xla.amp import syncfree
 
 import torchacc.ops as ops
 from torchacc.core import amp
+from torchacc.utils.logger import logger
 
 
 def _patch_functions(fn, newfn):
@@ -55,20 +56,56 @@ def patch_amp():
 
 def patch_fa():
     '''
-    Replace `flash_attn.flash_attn_func`, `flash_attn.flash_attn_varlen_func` with
-    `torchacc.ops.flash_attn_xla` and `torchacc.ops.flash_attn_varlen_xla`,
-    and dynamically determine which one to use at runtime based on the input device.
+    Replace `transformers.modeling_flash_attention_utils._flash_attention_forward` with
+    `torchacc.ops.flash_attn_xla` and `torchacc.ops.flash_attn_varlen_xla`
     '''
-    from transformers.models.llama.modeling_llama import LlamaFlashAttention2
-    def _flash_attention_forward(
-        self, query_states, key_states, value_states, attention_mask, query_length, dropout=0.0, softmax_scale=None
-    ):
-        if attention_mask is not None:
-            return ops.flash_attn_varlen_xla(query_states.contiguous(), key_states.contiguous(), value_states.contiguous(), attention_mask=attention_mask.contiguous(), dropout_p=dropout, softmax_scale=softmax_scale)
-        else:
-            return ops.flash_attn_xla(query_states, key_states, value_states, dropout_p=dropout, softmax_scale=softmax_scale)
+    try:
+        import transformers
+        version = transformers.__version__
+        if version >= "4.44.2":
+            import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
+            from typing import Optional
 
-    LlamaFlashAttention2._flash_attention_forward = _flash_attention_forward
+            def _flash_attention_forward(
+                query_states: torch.Tensor,
+                key_states: torch.Tensor,
+                value_states: torch.Tensor,
+                attention_mask: torch.Tensor,
+                query_length: int,
+                is_causal: bool,
+                dropout: float = 0.0,
+                position_ids: Optional[torch.Tensor] = None,
+                softmax_scale: Optional[float] = None,
+                sliding_window: Optional[int] = None,
+                use_top_left_mask: bool = False,
+                softcap: Optional[float] = None,
+                deterministic: bool = None,
+            ):
+                if attention_mask is not None:
+                    return ops.flash_attn_varlen_xla(
+                        query_states.contiguous(),
+                        key_states.contiguous(),
+                        value_states.contiguous(),
+                        attention_mask=attention_mask.contiguous(),
+                        dropout_p=dropout,
+                        softmax_scale=softmax_scale)
+                else:
+                    return ops.flash_attn_xla(
+                        query_states,
+                        key_states,
+                        value_states,
+                        dropout_p=dropout,
+                        softmax_scale=softmax_scale)
+
+            modeling_flash_attention_utils._flash_attention_forward = _flash_attention_forward
+        else:
+            logger.warn(
+                f'FlashAttention is not successfully patched with transformers version={version}'
+            )
+    except:
+        logger.warn(
+            'transformers is not installed, torchacc will not patch FlashAttention for transformers'
+        )
 
 
 def patch_llama(use_flash_attn):

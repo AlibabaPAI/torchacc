@@ -11,16 +11,19 @@ from torch import nn
 from flash_attn import flash_attn_func, flash_attn_varlen_func
 from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input  # noqa
 
+
 def _get_unpad_data(attention_mask):
     seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
     indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
     max_seqlen_in_batch = seqlens_in_batch.max().item()
-    cu_seqlens = F.pad(torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.int32), (1, 0))
+    cu_seqlens = F.pad(
+        torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.int32), (1, 0))
     return (
         indices,
         cu_seqlens,
         max_seqlen_in_batch,
     )
+
 
 class FlashAttention2(nn.Module):
 
@@ -32,17 +35,21 @@ class FlashAttention2(nn.Module):
         self.num_key_value_heads = num_key_value_heads
         self.num_key_value_groups = self.num_heads // self.num_key_value_heads
 
-    def _flash_attention_forward(
-        self, query_states, key_states, value_states, attention_mask, query_length, dropout=0.0, softmax_scale=None
-    ):
-
+    def _flash_attention_forward(self,
+                                 query_states,
+                                 key_states,
+                                 value_states,
+                                 attention_mask,
+                                 query_length,
+                                 dropout=0.0,
+                                 softmax_scale=None):
 
         # Contains at least one padding token in the sequence
         if attention_mask is not None:
             batch_size = query_states.shape[0]
             query_states, key_states, value_states, indices_q, cu_seq_lens, max_seq_lens = self._upad_input(
-                query_states, key_states, value_states, attention_mask, query_length
-            )
+                query_states, key_states, value_states, attention_mask,
+                query_length)
 
             cu_seqlens_q, cu_seqlens_k = cu_seq_lens
             max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
@@ -58,28 +65,37 @@ class FlashAttention2(nn.Module):
                 causal=True,
             )
 
-            attn_output = pad_input(attn_output_unpad, indices_q, batch_size, query_length)  # re fill the masked with 0.f
+            attn_output = pad_input(attn_output_unpad, indices_q, batch_size,
+                                    query_length)  # re fill the masked with 0.f
         else:
             attn_output = flash_attn_func(
-                query_states, key_states, value_states, dropout, softmax_scale=softmax_scale, causal=True
-            )
+                query_states,
+                key_states,
+                value_states,
+                dropout,
+                softmax_scale=softmax_scale,
+                causal=True)
 
         return attn_output
 
-    def _upad_input(self, query_layer, key_layer, value_layer, attention_mask, query_length):
-        indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
-        batch_size, kv_seq_len, num_key_value_heads, head_dim = key_layer.shape # b, s, h, d
+    def _upad_input(self, query_layer, key_layer, value_layer, attention_mask,
+                    query_length):
+        indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(
+            attention_mask)
+        batch_size, kv_seq_len, num_key_value_heads, head_dim = key_layer.shape  # b, s, h, d
 
         key_layer = index_first_axis(
-            key_layer.reshape(batch_size * kv_seq_len, num_key_value_heads, head_dim), indices_k  # filter out the key with unmask query
+            key_layer.reshape(batch_size * kv_seq_len, num_key_value_heads,
+                              head_dim),
+            indices_k  # filter out the key with unmask query
         )
         value_layer = index_first_axis(
-            value_layer.reshape(batch_size * kv_seq_len, num_key_value_heads, head_dim), indices_k
-        )
+            value_layer.reshape(batch_size * kv_seq_len, num_key_value_heads,
+                                head_dim), indices_k)
         if query_length == kv_seq_len:
             query_layer = index_first_axis(
-                query_layer.reshape(batch_size * kv_seq_len, self.num_heads, head_dim), indices_k
-            )
+                query_layer.reshape(batch_size * kv_seq_len, self.num_heads,
+                                    head_dim), indices_k)
             cu_seqlens_q = cu_seqlens_k
             max_seqlen_in_batch_q = max_seqlen_in_batch_k
             indices_q = indices_k
@@ -93,27 +109,33 @@ class FlashAttention2(nn.Module):
         else:
             # The -q_len: slice assumes left padding.
             attention_mask = attention_mask[:, -query_length:]
-            query_layer, indices_q, cu_seqlens_q, max_seqlen_in_batch_q = unpad_input(query_layer, attention_mask)
+            query_layer, indices_q, cu_seqlens_q, max_seqlen_in_batch_q = unpad_input(
+                query_layer, attention_mask)
 
         return (
-            query_layer, # (b*s, h, d), b*s is the true data
-            key_layer, # (b*s, h, d)
-            value_layer, # (b*s, h, d)
+            query_layer,  # (b*s, h, d), b*s is the true data
+            key_layer,  # (b*s, h, d)
+            value_layer,  # (b*s, h, d)
             indices_q,
             (cu_seqlens_q, cu_seqlens_k),
             (max_seqlen_in_batch_q, max_seqlen_in_batch_k),
         )
-    
+
     def forward(self, query_states: torch.Tensor, key_states: torch.Tensor, value_states: torch.Tensor,
                       attention_mask: Optional[torch.Tensor] = None) -> \
             Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         bsz, q_len, _, _ = query_states.size()
 
         attn_output = self._flash_attention_forward(
-            query_states, key_states, value_states, attention_mask, q_len, dropout=0.0
-        )
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            q_len,
+            dropout=0.0)
 
         return attn_output
+
 
 class FlashAttentionXla(nn.Module):
 
@@ -125,27 +147,44 @@ class FlashAttentionXla(nn.Module):
         self.num_key_value_heads = num_key_value_heads
         self.num_key_value_groups = self.num_heads // self.num_key_value_heads
 
-
-    def _flash_attention_forward(
-        self, query_states, key_states, value_states, attention_mask, query_length, dropout=0.0, softmax_scale=None
-    ):
+    def _flash_attention_forward(self,
+                                 query_states,
+                                 key_states,
+                                 value_states,
+                                 attention_mask,
+                                 query_length,
+                                 dropout=0.0,
+                                 softmax_scale=None):
 
         # Contains at least one padding token in the sequence
         if attention_mask is None:
-            attn_output = ta.ops.flash_attn_xla(query_states, key_states, value_states, dropout_p=dropout, causal=True)  # re fill the masked with 0.f
+            attn_output = ta.ops.flash_attn_xla(
+                query_states,
+                key_states,
+                value_states,
+                dropout_p=dropout,
+                causal=True)  # re fill the masked with 0.f
         else:
             attn_output = ta.ops.flash_attn_varlen_xla(
-                query_states, key_states, value_states, attention_mask=attention_mask, dropout_p=dropout, causal=True)
+                query_states,
+                key_states,
+                value_states,
+                attention_mask=attention_mask,
+                dropout_p=dropout,
+                causal=True)
         return attn_output
-    
     def forward(self, query_states: torch.Tensor, key_states: torch.Tensor, value_states: torch.Tensor,
                       attention_mask: Optional[torch.Tensor] = None) -> \
             Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         bsz, q_len, _, _ = query_states.size()
 
         attn_output = self._flash_attention_forward(
-            query_states, key_states, value_states, attention_mask, q_len, dropout=0.0
-        )
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            q_len,
+            dropout=0.0)
 
         return attn_output
 
@@ -153,7 +192,7 @@ class FlashAttentionXla(nn.Module):
 @pytest.mark.parametrize("dtype", [torch.bfloat16])
 @pytest.mark.parametrize("mha_type", ["mha"])
 @pytest.mark.parametrize("d", [128])
-@pytest.mark.parametrize( "seqlen", [2048])
+@pytest.mark.parametrize("seqlen", [2048])
 def test_flash_attn_varlen(seqlen, d, dtype, mha_type):
 
     batch_size = 4
@@ -162,35 +201,14 @@ def test_flash_attn_varlen(seqlen, d, dtype, mha_type):
 
     torch.manual_seed(0)
     device = "cuda"
-    q = torch.randn(
-        batch_size,
-        seqlen,
-        nheads,
-        d,
-        device=device,
-        dtype=dtype)
-    k = torch.randn(
-        batch_size,
-        seqlen,
-        nheads_k,
-        d,
-        device=device,
-        dtype=dtype)
-    v = torch.randn(
-        batch_size,
-        seqlen,
-        nheads_k,
-        d,
-        device=device,
-        dtype=dtype)
+    q = torch.randn(batch_size, seqlen, nheads, d, device=device, dtype=dtype)
+    k = torch.randn(batch_size, seqlen, nheads_k, d, device=device, dtype=dtype)
+    v = torch.randn(batch_size, seqlen, nheads_k, d, device=device, dtype=dtype)
     g = torch.randn_like(q)
     attention_mask = torch.zeros(
-        batch_size,
-        seqlen,
-        dtype=torch.int32).to(device)
+        batch_size, seqlen, dtype=torch.int32).to(device)
 
     k_lengths = torch.randint(low=2, high=seqlen, size=(batch_size,))
-    print(f'k_lengths={k_lengths}')
 
     for i in range(batch_size):
         k_len = k_lengths[i].item()
@@ -240,7 +258,22 @@ def test_flash_attn_varlen(seqlen, d, dtype, mha_type):
         dv_xla,
     ) = torch.autograd.grad(ret_xla, (q_xla, k_xla, v_xla), g_xla)
     ta.mark_step()
-    
-    assert torch.allclose(dq_xla.cpu().detach(), dq.cpu().detach(), rtol=1e-2, atol=1e-2, equal_nan=True)
-    assert torch.allclose(dk_xla.cpu().detach(), dk.cpu().detach(), rtol=1e-2, atol=1e-2, equal_nan=True)
-    assert torch.allclose(dv_xla.cpu().detach(), dv.cpu().detach(), rtol=1e-2, atol=1e-2, equal_nan=True)
+
+    assert torch.allclose(
+        dq_xla.cpu().detach(),
+        dq.cpu().detach(),
+        rtol=1e-2,
+        atol=1e-2,
+        equal_nan=True)
+    assert torch.allclose(
+        dk_xla.cpu().detach(),
+        dk.cpu().detach(),
+        rtol=1e-2,
+        atol=1e-2,
+        equal_nan=True)
+    assert torch.allclose(
+        dv_xla.cpu().detach(),
+        dv.cpu().detach(),
+        rtol=1e-2,
+        atol=1e-2,
+        equal_nan=True)

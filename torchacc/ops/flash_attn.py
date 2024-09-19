@@ -165,8 +165,8 @@ class SPMDFlashAttnVarlenXla(torch.autograd.Function):
 class FlashAttnVarlenXla(torch.autograd.Function):
 
     @staticmethod
-    def forward(ctx, q, k, v, attention_mask, dropout_p, softmax_scale, causal, window_size,
-                alibi_slopes, deterministic, return_softmax):
+    def forward(ctx, q, k, v, attention_mask, dropout_p, softmax_scale, causal,
+                window_size, alibi_slopes, deterministic, return_softmax):
         if softmax_scale is None:
             softmax_scale = q.shape[-1]**(-0.5)
         assert isinstance(window_size, tuple) and len(window_size) == 2
@@ -175,8 +175,8 @@ class FlashAttnVarlenXla(torch.autograd.Function):
         q, k, v = [maybe_contiguous(x) for x in (q, k, v)]
 
         softmax_lse, out, rng_state, cu_seqlens_q, cu_seqlens_k = torch_xla._XLAC._flash_attention_forward(
-            q, k, v, attention_mask, alibi_slopes, dropout_p, softmax_scale, False, causal,
-            window_size[0], window_size[1], return_softmax, None)
+            q, k, v, attention_mask, alibi_slopes, dropout_p, softmax_scale,
+            False, causal, window_size[0], window_size[1], return_softmax, None)
         out = out.to(q.dtype)
 
         ctx.save_for_backward(q, k, v, out, softmax_lse, cu_seqlens_q,
@@ -197,9 +197,9 @@ class FlashAttnVarlenXla(torch.autograd.Function):
         dout, q, k, v, out = [maybe_contiguous(x) for x in (dout, q, k, v, out)]
         dq, dk, dv, softmax_d = torch_xla._XLAC._flash_attention_backward(
             dout, q, k, v, out, softmax_lse, cu_seqlens_q, cu_seqlens_k,
-            ctx.alibi_slopes, ctx.dropout_p,
-            ctx.softmax_scale, False, ctx.causal, ctx.window_size[0],
-            ctx.window_size[1], ctx.deterministic, None, rng_state)
+            ctx.alibi_slopes, ctx.dropout_p, ctx.softmax_scale, False,
+            ctx.causal, ctx.window_size[0], ctx.window_size[1],
+            ctx.deterministic, None, rng_state)
 
         dq = dq[..., :dout.shape[-1]]  # We could have padded the head dimension
         dk = dk[..., :dout.shape[-1]]
@@ -220,9 +220,8 @@ class FlashAttnXla(torch.autograd.Function):
         bsz, q_len, head_size, _ = q.size()
 
         softmax_lse, out, rng_state = torch_xla._XLAC._flash_attention_forward(
-            q, k, v, None, alibi_slopes,
-            dropout_p, softmax_scale, False, causal, window_size[0],
-            window_size[1], return_softmax, None)
+            q, k, v, None, alibi_slopes, dropout_p, softmax_scale, False,
+            causal, window_size[0], window_size[1], return_softmax, None)
         out = out.to(q.dtype)
 
         ctx.save_for_backward(q, k, v, out, softmax_lse, rng_state)
@@ -240,10 +239,10 @@ class FlashAttnXla(torch.autograd.Function):
         q, k, v, out, softmax_lse, rng_state = ctx.saved_tensors
 
         dq, dk, dv, softmax_d = torch_xla._XLAC._flash_attention_backward(
-            dout, q, k, v, out, softmax_lse, None, None,
-            ctx.alibi_slopes, ctx.dropout_p,
-            ctx.softmax_scale, False, ctx.causal, ctx.window_size[0],
-            ctx.window_size[1], ctx.deterministic, None, rng_state)
+            dout, q, k, v, out, softmax_lse, None, None, ctx.alibi_slopes,
+            ctx.dropout_p, ctx.softmax_scale, False, ctx.causal,
+            ctx.window_size[0], ctx.window_size[1], ctx.deterministic, None,
+            rng_state)
 
         dq = dq[..., :dout.shape[-1]]  # We could have padded the head dimension
         dk = dk[..., :dout.shape[-1]]
