@@ -126,7 +126,6 @@ def get_live_range(file_content: str, tensors: dict) -> tuple[dict, set]:
         if name not in tensors:
             name = name[:-2]
         if name not in tensors:
-            # raise ValueError(f"Tenosr name is not exist in value list. Tensor name: {name}.")
             continue
         if name in tensors:
             tensors[name]['start'] = live_range_start
@@ -209,8 +208,7 @@ def plot_tensor_lifecycle(tensors: dict, allocations: dict):
             max_time = max(max_time, end)
             max_buffer_size = max(max_buffer_size, offset + size)
         except:
-            # print(f"Error: {tensor_name} has invalid info: {tensor_info}")
-            pass
+            continue
 
     allocations_group_by_size = get_allocation_group_by_size(allocations)
     for index, allocation_info in sorted(allocations_group_by_size.items(),
