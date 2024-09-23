@@ -30,25 +30,18 @@ def setup_env():
         os.environ['PJRT_ALLOCATOR_FRACTION'] = orign_env
 
 
-# FIXME:
-# seqlen_q = 113, seqlen_k = 203, d = 32, dropout_p = 0.0, causal = False, local = True, alibi = False, deterministic = False, mha_type = 'mha', dtype = torch.float16
-# seqlen_q = 113, seqlen_k = 203, d = 32, dropout_p = 0.0, causal = True, local = False, alibi = False, deterministic = False, mha_type = 'mha', dtype = torch.float16
-# seqlen_q = 113, seqlen_k = 203, d = 256, dropout_p = 0.0, causal = False, local = False, alibi = True, deterministic = False, mha_type = 'mqa', dtype = torch.bfloat16
-# seqlen_q = 512, seqlen_k = 256, d = 32, dropout_p = 0.0, causal = False, local = False, alibi = True, deterministic = False, mha_type = 'gqa', dtype = torch.bfloat16
-# seqlen_q = 113, seqlen_k = 203, d = 32, dropout_p = 0.17, causal = False, local = False, alibi = False, deterministic = False, mha_type = 'mha', dtype = torch.float16
-
-
-@pytest.mark.parametrize("dtype", [torch.float16])
+@pytest.mark.parametrize("dtype", [torch.bfloat16])
 @pytest.mark.parametrize("mha_type", ["mha"])
 @pytest.mark.parametrize("deterministic", [False])
-@pytest.mark.parametrize("alibi", [False])
-@pytest.mark.parametrize("local", [False])
-@pytest.mark.parametrize("causal", [True])
-@pytest.mark.parametrize("d", [32])
+@pytest.mark.parametrize("alibi", [False, True])
+@pytest.mark.parametrize("local", [False, True])
+@pytest.mark.parametrize("causal", [False, True])
+@pytest.mark.parametrize("d", [128])
 @pytest.mark.parametrize(
     "seqlen_q,seqlen_k",
     [
         (113, 203),
+        (128, 128),
         # (108, 256),
         # (256, 512),
         # (512, 256),

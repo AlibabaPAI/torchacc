@@ -222,6 +222,9 @@ class FlashAttnXla(torch.autograd.Function):
 
         bsz, q_len, head_size, _ = q.size()
 
+        maybe_contiguous = lambda x: x.contiguous() if x.stride(-1) != 1 else x
+        q, k, v = [maybe_contiguous(x) for x in (q, k, v)]
+
         softmax_lse, out, rng_state = torch_xla._XLAC._flash_attention_forward(
             q, k, v, None, alibi_slopes, dropout_p, softmax_scale, False,
             causal, window_size[0], window_size[1], return_softmax, None)
@@ -240,6 +243,9 @@ class FlashAttnXla(torch.autograd.Function):
     @staticmethod
     def backward(ctx, dout, *args):
         q, k, v, out, softmax_lse, rng_state = ctx.saved_tensors
+
+        maybe_contiguous = lambda x: x.contiguous() if x.stride(-1) != 1 else x
+        dout, q, k, v, out = [maybe_contiguous(x) for x in (dout, q, k, v, out)]
 
         dq, dk, dv, softmax_d = torch_xla._XLAC._flash_attention_backward(
             dout, q, k, v, out, softmax_lse, None, None, ctx.alibi_slopes,
@@ -357,7 +363,7 @@ def flash_attn_xla(
     deterministic=False,
     return_attn_probs=False,
 ):
-    assert q.dtype in [torch.bfloaft16,
+    assert q.dtype in [torch.bfloat16,
                        torch.float16], 'flash attention only supports fp16/bf16'
     return FlashAttnXla.apply(
         q,
