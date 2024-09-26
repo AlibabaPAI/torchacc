@@ -195,13 +195,20 @@ class SplitForwardGatherBackward(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, tensor, seq_dim, process_group):
+    def forward(ctx, tensor, seq_dim, process_group, grad_scale=None):
         ctx.process_group = process_group
         ctx.seq_dim = seq_dim
+        ctx.grad_scale = grad_scale
         return _split(tensor, seq_dim, process_group)
 
     @staticmethod
     def backward(ctx, grad_output):
+        if ctx.grad_scale == "up":
+            grad_output = grad_output * dist.get_world_size(
+                group=ctx.process_group)
+        elif ctx.grad_scale == "down":
+            grad_output = grad_output / dist.get_world_size(
+                group=ctx.process_group)
         return _gather(grad_output, ctx.seq_dim, ctx.process_group), None, None
 
 
@@ -210,17 +217,27 @@ class GatherForwardSplitBackward(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, tensor, seq_dim, process_group):
+    def forward(ctx, tensor, seq_dim, process_group, grad_scale=None):
         ctx.process_group = process_group
         ctx.seq_dim = seq_dim
+        ctx.grad_scale = grad_scale
         return _gather(tensor, seq_dim, process_group)
 
     @staticmethod
     def backward(ctx, grad_output):
+        if ctx.grad_scale == "up":
+            grad_output = grad_output * dist.get_world_size(
+                group=ctx.process_group)
+        elif ctx.grad_scale == "down":
+            grad_output = grad_output / dist.get_world_size(
+                group=ctx.process_group)
         return _split(grad_output, ctx.seq_dim, ctx.process_group), None, None
 
 
-def split_forward_gather_backward(tensor, seq_dim, process_group):
+def split_forward_gather_backward(tensor,
+                                  seq_dim,
+                                  process_group,
+                                  grad_scale=None):
     """ Split the input tensor along sequence dimension during forward
         and gather the input tensor during backward, which are parallelized
         across GPUs in a context parallel group.
@@ -228,6 +245,9 @@ def split_forward_gather_backward(tensor, seq_dim, process_group):
         tensor (torch.Tensor): [batch_size, seqlen * cp_size, nheads, headdim].
         seq_dim (int): The dimension for split and gather.
         process_group (torch.distributed.ProcessGroup, optional): The context parallel group.
+        grad_scale (str, optional): The gradient scale. 'up' or 'down'. 'up' means the
+        gradient will be multiplied by the size of process group, and 'down' means the
+        gradient will be divided by the size of process group.
 
     Returns:
         tensor (torch.Tensor): [batch_size, seqlen, nheads, headdim].
@@ -235,7 +255,10 @@ def split_forward_gather_backward(tensor, seq_dim, process_group):
     return SplitForwardGatherBackward.apply(tensor, seq_dim, process_group)
 
 
-def gather_forward_split_backward(tensor, seq_dim, process_group):
+def gather_forward_split_backward(tensor,
+                                  seq_dim,
+                                  process_group,
+                                  grad_scale=None):
     """ Gather the input tensor along sequence dimension during forward
         and split the input tensor during backward, which are parallelized
         across GPUs in a context parallel group.
@@ -244,6 +267,9 @@ def gather_forward_split_backward(tensor, seq_dim, process_group):
         tensor (torch.Tensor): [batch_size, seqlen, nheads, headdim].
         seq_dim (int): The dimension for gather and split.
         process_group (torch.distributed.ProcessGroup, optional): The context parallel group.
+        grad_scale (str, optional): The gradient scale. 'up' or 'down'. 'up' means the
+        gradient will be multiplied by the size of process group, and 'down' means the
+        gradient will be divided by the size of process group.
 
     Returns:
         tensor (torch.Tensor): [batch_size, seqlen * cp_size, nheads, headdim].
