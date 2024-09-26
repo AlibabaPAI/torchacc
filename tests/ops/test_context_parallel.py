@@ -85,7 +85,7 @@ class ContextParallelTest(MultiProcessTestBase):
 
         # Context parallel
         hidden_states_cp = hidden_states.detach().clone().requires_grad_()
-        hidden_states_cp_tmp = context_parallel.slice_forward(
+        hidden_states_cp_tmp = context_parallel.split_forward_gather_backward(
             hidden_states_cp, 1, cp_group)
         B, N, C = hidden_states_cp_tmp.shape
         qkv = hidden_states_cp_tmp.reshape(B, N, 3, n_heads,
@@ -127,8 +127,6 @@ class ContextParallelTest(MultiProcessTestBase):
 
         loss_cp = torch.sum(output_cp)
         loss_cp.backward()
-
-        dist.all_reduce(hidden_states_cp.grad)
 
         # Flash Attention
         hidden_states_fa = hidden_states.detach().clone().requires_grad_()
