@@ -246,8 +246,8 @@ def split_forward_gather_backward(tensor,
         seq_dim (int): The dimension for split and gather.
         process_group (torch.distributed.ProcessGroup, optional): The context parallel group.
         grad_scale (str, optional): The gradient scale. 'up' or 'down'. 'up' means the
-        gradient will be multiplied by the size of process group, and 'down' means the
-        gradient will be divided by the size of process group.
+            gradient will be multiplied by the size of process group, and 'down' means the
+            gradient will be divided by the size of process group.
 
     Returns:
         tensor (torch.Tensor): [batch_size, seqlen, nheads, headdim].
@@ -268,8 +268,8 @@ def gather_forward_split_backward(tensor,
         seq_dim (int): The dimension for gather and split.
         process_group (torch.distributed.ProcessGroup, optional): The context parallel group.
         grad_scale (str, optional): The gradient scale. 'up' or 'down'. 'up' means the
-        gradient will be multiplied by the size of process group, and 'down' means the
-        gradient will be divided by the size of process group.
+            gradient will be multiplied by the size of process group, and 'down' means the
+            gradient will be divided by the size of process group.
 
     Returns:
         tensor (torch.Tensor): [batch_size, seqlen * cp_size, nheads, headdim].
