@@ -155,28 +155,61 @@ def flash_attention(
                             cu_seqlens_q).clone()
 
 
-def slice_forward(tensor: torch.Tensor,
-                  seq_dim: int,
-                  process_group: Optional[dist.ProcessGroup] = None):
-    """ Slice the input tensor along sequence dimension into multiple chunks,
-        which are parallelized across GPUs in a context parallel group.
-
-    Args:
-        tensor (torch.Tensor): [batch_size, seqlen, nheads, headdim].
-        seq_dim (int): The dimension to be split.
-        process_group (torch.distributed.ProcessGroup, optional): The context parallel group.
-
-    Returns:
-        tensor (torch.Tensor): [batch_size, seqlen // cp_size, nheads, headdim].
-    """
+def all_gather(tensor: torch.Tensor,
+               process_group: Optional[dist.ProcessGroup] = None):
     cp_size = dist.get_world_size(process_group)
-    cp_rank = dist.get_rank(process_group)
-    if cp_size > 1:
-        if tensor.shape[seq_dim] % cp_size != 0:
-            raise ValueError(f"The seqlen {tensor.shape[seq_dim]} needs to" \
-                             f" be divisible by the size of process group {cp_size}.")
-        tensor = tensor.chunk(cp_size, dim=seq_dim)[cp_rank].contiguous()
-    return tensor
+    if cp_size == 1:
+        return [tensor]
+    tensor_list = [torch.empty_like(tensor) for _ in range(cp_size)]
+    torch.distributed.all_gather(tensor_list, tensor, group=process_group)
+    return tensor_list
+
+
+def _split(input, dim, process_group):
+    # skip if world_size == 1
+    rank = dist.get_rank(process_group)
+    world_size = dist.get_world_size(process_group)
+    if world_size == 1:
+        return input
+
+    # split sequence
+    if input.size(dim) % world_size != 0:
+        raise ValueError(f"The seqlen {input.size(dim)} needs to" \
+                          f" be divisible by the size of process group {world_size}.")
+    return input.chunk(world_size, dim=dim)[rank].contiguous()
+
+
+def _gather(input, dim, process_group):
+    # skip if world_size == 1
+    world_size = dist.get_world_size(process_group)
+    if world_size == 1:
+        return input
+
+    # gather sequence
+    output = all_gather(input, process_group)
+    return torch.cat(output, dim=dim).contiguous()
+
+
+class SplitForwardGatherBackward(torch.autograd.Function):
+    """Split the input and scatter to context parallel region.
+    """
+
+    @staticmethod
+    def forward(ctx, tensor, seq_dim, process_group, grad_scale=None):
+        ctx.process_group = process_group
+        ctx.seq_dim = seq_dim
+        ctx.grad_scale = grad_scale
+        return _split(tensor, seq_dim, process_group)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        if ctx.grad_scale == "up":
+            grad_output = grad_output * dist.get_world_size(
+                group=ctx.process_group)
+        elif ctx.grad_scale == "down":
+            grad_output = grad_output / dist.get_world_size(
+                group=ctx.process_group)
+        return _gather(grad_output, ctx.seq_dim, ctx.process_group), None, None
 
 
 class GatherForwardSplitBackward(torch.autograd.Function):
@@ -184,39 +217,48 @@ class GatherForwardSplitBackward(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(ctx, tensor, seq_dim, process_group):
+    def forward(ctx, tensor, seq_dim, process_group, grad_scale=None):
         ctx.process_group = process_group
         ctx.seq_dim = seq_dim
-        # skip if only one rank involved
-        cp_size = dist.get_world_size(process_group)
-        if cp_size == 1:
-            return tensor
-        tensor = tensor.view(
-            *tensor.shape[0:seq_dim],
-            2,
-            -1,
-            *tensor.shape[(seq_dim + 1):],
-        )
-        # all gather
-        tensor_list = [torch.empty_like(tensor) for _ in range(cp_size)]
-        torch.distributed.all_gather(tensor_list, tensor, group=process_group)
-        # concat
-        tensor = torch.cat(tensor_list, dim=seq_dim).contiguous()
-        index = list(range(0, cp_size * 2, 2)) + list(
-            range(cp_size * 2 - 1, 0, -2))
-        index = torch.tensor(index, device=tensor.device)
-        tensor = tensor.index_select(seq_dim, index)
-        tensor = tensor.view(*tensor.shape[0:seq_dim], -1,
-                             *tensor.shape[(seq_dim + 2):])
-        return tensor
+        ctx.grad_scale = grad_scale
+        return _gather(tensor, seq_dim, process_group)
 
     @staticmethod
     def backward(ctx, grad_output):
-        return slice_forward(grad_output, ctx.seq_dim,
-                             ctx.process_group), None, None
+        if ctx.grad_scale == "up":
+            grad_output = grad_output * dist.get_world_size(
+                group=ctx.process_group)
+        elif ctx.grad_scale == "down":
+            grad_output = grad_output / dist.get_world_size(
+                group=ctx.process_group)
+        return _split(grad_output, ctx.seq_dim, ctx.process_group), None, None
 
 
-def gather_forward_split_backward(tensor, seq_dim, process_group):
+def split_forward_gather_backward(tensor,
+                                  seq_dim,
+                                  process_group,
+                                  grad_scale=None):
+    """ Split the input tensor along sequence dimension during forward
+        and gather the input tensor during backward, which are parallelized
+        across GPUs in a context parallel group.
+    Args:
+        tensor (torch.Tensor): [batch_size, seqlen * cp_size, nheads, headdim].
+        seq_dim (int): The dimension for split and gather.
+        process_group (torch.distributed.ProcessGroup, optional): The context parallel group.
+        grad_scale (str, optional): The gradient scale. 'up' or 'down'. 'up' means the
+            gradient will be multiplied by the size of process group, and 'down' means the
+            gradient will be divided by the size of process group.
+
+    Returns:
+        tensor (torch.Tensor): [batch_size, seqlen, nheads, headdim].
+    """
+    return SplitForwardGatherBackward.apply(tensor, seq_dim, process_group)
+
+
+def gather_forward_split_backward(tensor,
+                                  seq_dim,
+                                  process_group,
+                                  grad_scale=None):
     """ Gather the input tensor along sequence dimension during forward
         and split the input tensor during backward, which are parallelized
         across GPUs in a context parallel group.
@@ -225,6 +267,9 @@ def gather_forward_split_backward(tensor, seq_dim, process_group):
         tensor (torch.Tensor): [batch_size, seqlen, nheads, headdim].
         seq_dim (int): The dimension for gather and split.
         process_group (torch.distributed.ProcessGroup, optional): The context parallel group.
+        grad_scale (str, optional): The gradient scale. 'up' or 'down'. 'up' means the
+            gradient will be multiplied by the size of process group, and 'down' means the
+            gradient will be divided by the size of process group.
 
     Returns:
         tensor (torch.Tensor): [batch_size, seqlen * cp_size, nheads, headdim].
