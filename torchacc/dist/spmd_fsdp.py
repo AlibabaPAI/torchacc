@@ -73,7 +73,7 @@ class SpmdFullyShardedDataParallel(ParallelModule):
                               ('fsdp', 'tensor'))
         model = FSDPv2(
             model,
-            mesh,
+            mesh=mesh,
             shard_output=self.shard_output_callable,
             compute_dtype=dtype,
             auto_wrap_policy=auto_wrap_policy,
