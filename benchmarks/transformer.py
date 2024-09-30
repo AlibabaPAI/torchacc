@@ -79,6 +79,7 @@ def _get_config(args):
     config.backend = args.backend
     config.compute.acc_llama = "llama" in args.model_name.lower(
     ) and args.backend != 'lazy'
+    config.compute.acc_llama = False
     config.compute.fp16 = args.fp16
     config.compute.bf16 = args.bf16
 
@@ -97,11 +98,13 @@ def _get_config(args):
 def _build_model_and_loader(args):
     config = AutoConfig.from_pretrained(
         args.model_name, cache_dir='./log/model_cache')
+    config.use_cache = False
     if args.use_flash_attn:
         model = AutoModelForCausalLM.from_config(
             config, attn_implementation='flash_attention_2')
     else:
-        model = AutoModelForCausalLM.from_config(config)
+        model = AutoModelForCausalLM.from_config(config, attn_implementation='eager')
+        # model = AutoModelForCausalLM.from_config(config)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=False)
     tokenizer.model_max_length = args.max_seq_length
@@ -115,9 +118,11 @@ def _build_model_and_loader(args):
     if args.acc:
         config = _get_config(args)
         model, train_loader = ta.accelerate(model, train_loader, config)
+        if args.backend == "lazy" and args.use_flash_attn:
+            ta.utils.patch.patch_llama(True)
     else:
         model = model.to(args.local_rank)
-        model = torch.nn.parallel.DistributedDataParallel(model)
+        # model = torch.nn.parallel.DistributedDataParallel(model)
 
     return model, train_loader
 
@@ -136,7 +141,7 @@ def _build_lr_scheduler(optimizer, loader, num_train_epochs):
 def train_gpt(args):
     model, train_loader = _build_model_and_loader(args)
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=5e-5, betas=(0.9, 0.999), eps=1e-8)
+        model.parameters(), lr=torch.tensor(5e-5).to(model.device), betas=(0.9, 0.999), eps=1e-8)
     lr_scheduler = _build_lr_scheduler(optimizer, train_loader,
                                        args.num_train_epochs)
     scaler = torch.cuda.amp.GradScaler() if args.fp16 else None
@@ -144,14 +149,49 @@ def train_gpt(args):
     amp_dtype = torch.float16 if args.fp16 else torch.bfloat16
 
     model.train()
-    if args.global_rank == 0:
-        writer = SummaryWriter(
-            f'./{args.tb_folder}/{args.model_name}_acc-{args.acc}_gpu-{args.world_size}_'
-            f'amp-{amp_enabled}-{amp_dtype}_'
-            f'dp-{args.dp_size}_pp-{args.pp_size}_fsdp-{args.fsdp_size}_'
-            f'tp-{args.tp_size}-bs{args.batch_size}_'
-            f'disable_loss_print-{args.disable_loss_print}')
-        writer.add_text('args', str(args))
+    @torch.compile(fullgraph=False, backend="openxla")
+    def train_step(inputs):
+        optimizer.zero_grad()
+        # with torch.autocast("xla", enabled=amp_enabled, dtype=amp_dtype):
+        with torch.cuda.amp.autocast(
+                enabled=amp_enabled, dtype=amp_dtype):
+            # if step == 0:
+            #     out = torch._dynamo.explain(model)(**inputs)
+            #     print(out)
+            # exit()
+            outputs = model(**inputs)
+            loss = outputs['loss']
+        print(f"loss: {loss} {loss.device}")
+        if scaler:
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            # optimizer.step()
+        return loss
+
+    @torch.compile
+    def opt_step():
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+        lr_scheduler.step()
+
+    # model = torch.compile(model, backend='openxla')
+    # backend="aot_eager"
+    # print(f"after: {model}")
+
+    # if args.global_rank == 0:
+    #     writer = SummaryWriter(
+    #         f'./{args.tb_folder}/{args.model_name}_acc-{args.acc}_gpu-{args.world_size}_'
+    #         f'amp-{amp_enabled}-{amp_dtype}_'
+    #         f'dp-{args.dp_size}_pp-{args.pp_size}_fsdp-{args.fsdp_size}_'
+    #         f'tp-{args.tp_size}-bs{args.batch_size}_'
+    #         f'disable_loss_print-{args.disable_loss_print}')
+    #     writer.add_text('args', str(args))
 
     if args.profile:
         prof = torch.profiler.profile(
@@ -168,22 +208,37 @@ def train_gpt(args):
                         for key, value in inputs.items()
                         if isinstance(value, torch.Tensor)
                     }
-                optimizer.zero_grad()
-                with torch.cuda.amp.autocast(
-                        enabled=amp_enabled, dtype=amp_dtype):
-                    outputs = model(**inputs)
-                    loss = outputs['loss']
-                if scaler:
-                    scaler.scale(loss).backward()
-                    scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                    scaler.step(optimizer)
-                    scaler.update()
-                else:
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                    optimizer.step()
-                lr_scheduler.step()
+                # if step == 0:
+                #     out = torch._dynamo.explain(train_step)(inputs)
+                #     print(out)
+                # exit()
+                # loss = train_step_opt(inputs)
+                # if step == 0:
+                #     out = torch._dynamo.explain(model)(**inputs)
+                #     print(out)
+                loss = train_step(inputs)
+                # exit()
+                # optimizer.zero_grad()
+                # with torch.cuda.amp.autocast(
+                #         enabled=amp_enabled, dtype=amp_dtype):
+                #     # if step == 0:
+                #     #     out = torch._dynamo.explain(model)(**inputs)
+                #     #     print(out)
+                #     # exit()
+                #     outputs = model(**inputs)
+                #     loss = outputs['loss']
+                # if scaler:
+                #     scaler.scale(loss).backward()
+                #     scaler.unscale_(optimizer)
+                #     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                #     scaler.step(optimizer)
+                #     scaler.update()
+                # else:
+                #     loss.backward()
+                #     # opt_step()
+                #     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                #     optimizer.step()
+                # lr_scheduler.step()
 
                 if step % args.log_interval == 0 and args.global_rank == 0:
                     if args.disable_loss_print:
@@ -193,16 +248,19 @@ def train_gpt(args):
                     step = step + epoch * len(train_loader)
                     time_cost = time.time() - iteration_time
                     iteration_time = time.time()
-                    writer.add_scalar(
-                        'samples/s',
-                        args.batch_size / time_cost,
-                        global_step=step)
-                    writer.add_scalar('loss', loss, global_step=step)
-                    writer.add_scalar(
-                        'lr', lr_scheduler.get_last_lr()[0], global_step=step)
+
+                    logger.info(f"Max memory usage: {torch.cuda.max_memory_allocated() / 1024.0 / 1024.0 / 1024.0:.4f}")
+                    logger.info(f"Allocated memory usage: {torch.cuda.memory_allocated() / 1024.0 / 1024.0 / 1024.0:.4f}")
+                    # writer.add_scalar(
+                    #     'samples/s',
+                    #     args.batch_size / time_cost,
+                    #     global_step=step)
+                    # writer.add_scalar('loss', loss, global_step=step)
+                    # writer.add_scalar(
+                    #     'lr', lr_scheduler.get_last_lr()[0], global_step=step)
                     logger.info(
                         f'[Iteration {step}/{len(train_loader)*args.num_train_epochs}] '
-                        f'loss: {loss:.2f}, lr: {lr_scheduler.get_last_lr()[0]}, '
+                        f'loss: {loss:.2f}, '
                         f'complete in {time_cost:.2f} s')
                 pbar.update(1)
                 if args.profile:

@@ -115,7 +115,7 @@ def _set_env():
 
 
 patch.patch_fa()
-decompose.replace_decompose()
+# decompose.replace_decompose()
 _set_env()
 
 version = '2.3.0'
