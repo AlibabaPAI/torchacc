@@ -43,6 +43,7 @@ def main(args):
 
     # set config
     config = ta.Config()
+    config.backend = args.backend
     config.compute.fp16 = args.fp16
     config.compute.bf16 = args.bf16
 
@@ -139,6 +140,7 @@ if __name__ == '__main__':
     parser.add_argument("--gc", action="store_true", default=False)
     parser.add_argument("--fp16", action="store_true", default=False)
     parser.add_argument("--bf16", action="store_true", default=False)
+    parser.add_argument("--backend", type=str, default="lazy")
     args = parser.parse_args()
 
     set_seed()

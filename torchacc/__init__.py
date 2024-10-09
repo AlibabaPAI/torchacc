@@ -1,7 +1,6 @@
 import os
 from dataclasses import dataclass, field
 
-import torch
 from torch_xla.amp import syncfree
 
 from . import dist, ops

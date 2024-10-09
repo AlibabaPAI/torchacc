@@ -1,6 +1,8 @@
 import sys
 
+import torch
 import torch.nn.functional as F
+import torch.utils._pytree as pytree
 import torch_xla.distributed.parallel_loader as pl
 
 from torchacc.utils.logger import logger
@@ -130,6 +132,24 @@ class BucketingParallelLoader(pl.ParallelLoader):
         return batch
 
 
+class CUDALoader(object):
+
+    def __init__(self, iter, device):
+        self._iter = iter
+        self.device = device
+
+    def _tensor_to_cuda(self, maybe_tensor):
+        if torch.is_tensor(maybe_tensor):
+            return maybe_tensor.to(self.device)
+        return maybe_tensor
+
+    def __next__(self):
+        return pytree.tree_map(self._tensor_to_cuda, next(self._iter))
+
+    def __iter__(self):
+        return self
+
+
 class AsyncLoader(object):
     """Wraps an existing PyTorch DataLoader with background data upload.
 
@@ -166,6 +186,8 @@ class AsyncLoader(object):
         self._parallel_loader_kwargs = kwargs
 
     def __iter__(self):
+        if isinstance(self._device, int) or self._device.type == 'cuda':
+            return CUDALoader(iter(self._loader), self._device)
         parallel_loader = BucketingParallelLoader(
             self._loader, [self._device],
             buckets=self.buckets,

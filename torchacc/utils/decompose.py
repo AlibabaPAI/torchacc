@@ -23,11 +23,11 @@ if torch._C._has_mkldnn:
 def replace_decompose():
     # get registered inplace decompose op
     inplace_set = []
-    for type in ["meta", "post_autograd", "pre_autograd"]:
-        for keys in global_decomposition_table[type]:
-            op_name = keys.__name__.split('.')[0]
-            if op_name[-1] == '_' and keys not in inplace_set:
-                inplace_set.append(keys)
+    # only replace decompose table
+    for keys in global_decomposition_table["post_autograd"]:
+        op_name = keys.__name__.split('.')[0]
+        if op_name[-1] == '_' and keys not in inplace_set:
+            inplace_set.append(keys)
 
     # clear decomposition table
     for key, table in global_decomposition_table.items():

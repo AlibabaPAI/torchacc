@@ -2,10 +2,8 @@ import inspect
 import os
 from typing import Optional, Tuple, Union
 
-import numpy as np
 import torch
 import torch.distributed as dist
-import torch_xla
 import torch_xla.core.xla_model as xm
 
 import torchacc as ta
@@ -18,8 +16,6 @@ try:
     from torchdistx import deferred_init, fake  # type: ignore[import]
 except ImportError:
     _TORCHDISTX_AVAIL = False
-
-_COMMUNICATION_INITED = False
 
 
 def _setup_env(config: ta.Config) -> None:
@@ -37,46 +33,6 @@ def _setup_env(config: ta.Config) -> None:
         if "--xla_gpu_enable_all_reduce_splitter" not in xla_flags:
             xla_flags += " --xla_gpu_enable_all_reduce_splitter=true"
     os.environ["XLA_FLAGS"] = xla_flags
-
-
-def init_comm(config: ta.Config) -> None:
-    global _COMMUNICATION_INITED
-    if _COMMUNICATION_INITED:
-        return
-
-    device = ta.lazy_device()
-
-    if config.dist.pp.size > 1:
-        # Initialize the communication for send/recv to prevent the first recv in later stages
-        # from waiting for an excessive amount of time and potentially causing a timeout.
-        mesh = config.get_mesh()
-        tmp = torch.tensor(0.0, requires_grad=False).to(device)
-        if not mesh.is_last_stage():
-            dst_rank = mesh.stage_to_global(stage_id=mesh.get_stage_id() + 1)
-            dist.send(tmp, dst_rank)
-        if not mesh.is_first_stage():
-            src_rank = mesh.stage_to_global(stage_id=mesh.get_stage_id() - 1)
-            dist.recv(tmp, src_rank)
-        # Execute the above computation graph first to ensure that the execution order of send/recv
-        # does not interfere with the subsequent all reduce operations.
-        ta.sync()
-
-        if torch_xla.runtime.is_spmd():
-            # Initialize the communication for collective operations (such as collective permute, all reduce) to
-            # prevent hangs in PP where only some devices participate in the communication.
-            world_size = ta.dist.world_size()
-            device_ids = np.array(list(range(world_size)))
-            tp_mesh = ta.dist.tp.Mesh(device_ids, (1, world_size))
-            a = torch.zeros(1, world_size).to(device)
-            b = torch.zeros(world_size, 2).to(device)
-            ta.dist.tp.mark_sharding(a, tp_mesh, (None, 1))
-            ta.dist.tp.mark_sharding(b, tp_mesh, (1, None))
-            c = torch.einsum('ij,jk->ik', a, b)
-            # SPMD will insert all reduce here
-            ta.dist.tp.mark_sharding(c, tp_mesh, (None, None))
-            ta.sync()
-
-    _COMMUNICATION_INITED = True
 
 
 def broadcast_master_param(model: torch.nn.Module, config: ta.Config) -> None:
@@ -102,11 +58,22 @@ def accelerate(
     Returns:
         Union[Tuple[torch.nn.Module, torch.utils.data.DataLoader], torch.nn.Module]: Optimized model and dataloader (if provided).
     """
-    device = ta.lazy_device()
     config.validate()
     ta.get_global_context().config = config
     _setup_env(config)
-    init_comm(config)
+
+    if config.is_distributed_parallel():
+        ta.dist.init_process_group(config)
+        ta.dist.init_nccl_context(config)
+
+    if config.is_eager_backend():
+        if dist.is_initialized():
+            device = dist.get_rank() % torch.cuda.device_count()
+        else:
+            device = torch.cuda.current_device()
+        torch.cuda.set_device(device)
+    else:
+        device = ta.lazy_device()
 
     if dataloader:
         dataloader = ta.AsyncLoader(
@@ -121,8 +88,11 @@ def accelerate(
     if config.compute.acc_scaled_dot_attn:
         torch.nn.functional.scaled_dot_product_attention = ta.ops.scaled_dot_product_attention
 
+    if not config.compute.disable_kernel_patches and config.is_eager_backend():
+        ta.ops.apply_liger_kernel()
+
     # replace the optimizer and grad scaler with the syncfree optimizer and the torchacc grad scaler
-    if config.compute.fp16:
+    if config.compute.fp16 and config.is_lazy_backend():
         patch.patch_amp()
 
     # tracing
@@ -166,7 +136,8 @@ def accelerate(
     model = model.to(device)
 
     # broadcast parameters
-    broadcast_master_param(model, config)
+    if config.is_lazy_backend():
+        broadcast_master_param(model, config)
 
     if not hasattr(model, "device"):
         model.device = device
