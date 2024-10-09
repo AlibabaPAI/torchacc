@@ -29,16 +29,12 @@ class ComputeConfig(BaseConfig):
         bf16 (bool): Whether it is the data type of bf16.
         acc_scaled_dot_attn (bool): Whether torch.nn.functional.scaled_dot_product_attention
             should be replaced with the torchacc version of flash attention.
-        acc_llama (bool): Whether the memory intensive operations of
-            llama will be replaced with the liger kernels.
-        acc_qwen2 (bool): Whether the memory intensive operations of
-            qwen2 will be replaced with the liger kernels.
+        disable_kernel_patches (bool): Whether the kernel patches will be disabled.
     """
     fp16: bool = False
     bf16: bool = False
     acc_scaled_dot_attn: bool = False
-    acc_llama: bool = False
-    acc_qwen2: bool = False
+    disable_kernel_patches: bool = False
 
     def validate(self):
         assert isinstance(self.fp16,
@@ -49,11 +45,8 @@ class ComputeConfig(BaseConfig):
             self.acc_scaled_dot_attn,
             bool), "ComputeConfig.acc_scaled_dot_attn should be of bool type"
         assert isinstance(
-            self.acc_llama,
-            bool), "ComputeConfig.acc_llama should be of bool type"
-        assert isinstance(
-            self.acc_qwen2,
-            bool), "ComputeConfig.acc_qwen2 should be of bool type"
+            self.disable_kernel_patches,
+            bool), "ComputeConfig.disable_kernel_patches should be of bool type"
         if self.fp16 and self.bf16:
             raise ValueError(f"fp16 and bf16 cannot both be True")
 
@@ -370,12 +363,6 @@ class Config(BaseConfig):
         self.memory.validate()
         self.dataloader.validate()
         self.dist.validate()
-
-        if self.compute.acc_llama and self.is_lazy_backend():
-            raise ValueError("compute.acc_llama only support eager backend")
-
-        if self.compute.acc_qwen2 and self.is_lazy_backend():
-            raise ValueError("compute.acc_qwen2 only support eager backend")
 
     def get_mesh(self):
         """Get the distributed communication component Mesh. Mesh defines the individual communication

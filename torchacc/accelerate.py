@@ -88,11 +88,8 @@ def accelerate(
     if config.compute.acc_scaled_dot_attn:
         torch.nn.functional.scaled_dot_product_attention = ta.ops.scaled_dot_product_attention
 
-    if config.compute.acc_llama:
-        ta.ops.apply_liger_kernel_to_llama()
-
-    if config.compute.acc_qwen2:
-        ta.ops.apply_liger_kernel_to_qwen2()
+    if not config.compute.disable_kernel_patches and config.is_eager_backend():
+        ta.ops.apply_liger_kernel()
 
     # replace the optimizer and grad scaler with the syncfree optimizer and the torchacc grad scaler
     if config.compute.fp16 and config.is_lazy_backend():

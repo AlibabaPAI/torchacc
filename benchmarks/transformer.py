@@ -77,8 +77,6 @@ def _setup_ddp(local_rank):
 def _get_config(args):
     config = ta.Config()
     config.backend = args.backend
-    config.compute.acc_llama = "llama" in args.model_name.lower(
-    ) and args.backend != 'lazy'
     config.compute.fp16 = args.fp16
     config.compute.bf16 = args.bf16
 

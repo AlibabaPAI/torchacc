@@ -2,6 +2,8 @@ import importlib.util
 
 import torch
 
+import torchacc.utils.logger as logger
+
 IS_LIGER_KERNEL_AVAILABLE = importlib.util.find_spec("liger_kernel") is not None
 
 
@@ -126,3 +128,26 @@ def apply_liger_kernel_to_qwen2(
         modeling_qwen2.Qwen2ForCausalLM.forward = qwen2_lce_forward
     if swiglu:
         modeling_qwen2.Qwen2MLP.forward = mlp_forward
+
+
+def apply_liger_kernel():
+    """
+    Apply Liger kernels to replace original kernel implementations in HuggingFace Llama and Qwen2 models
+    """
+    if not IS_LIGER_KERNEL_AVAILABLE:
+        logger.warning(
+            "The liger kernel will not be used to accelerate the model. " \
+            "You can enable it by installing liger-kernel: `pip install liger-kernel`."
+        )
+        return
+    try:
+        apply_liger_kernel_to_llama()
+        apply_liger_kernel_to_qwen2()
+    except Exception as e:
+        logger.warning(
+            f"Failed to apply liger kernels to the model due to error: {e}. " \
+             "This is most likely because of the version mismatch between the transformers and the liger-kernel."
+        )
+    else:
+        logger.info("Liger kernel successfully replaced the operators in the model to enhance performance. " \
+                    "You can disable this feature by setting `config.disable_kernel_patches`.")
