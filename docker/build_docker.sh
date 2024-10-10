@@ -71,22 +71,19 @@ function push_to_hub {
     docker_with_torchacc_suffix="-"$(date +"%y%m%d")
 
     if [ "$push_to_hub" = true ]; then
-        for region in ${regions}
-        do
-            if [ -n "${DOCKER_USERNAME+x}" ] && [ -n "${DOCKER_PASSWORD+x}" ]; then
-                docker login --username=$DOCKER_USERNAME --password=$DOCKER_PASSWORD registry.cn-${region}.aliyuncs.com
+        if [ -n "${DOCKER_USERNAME+x}" ] && [ -n "${DOCKER_PASSWORD+x}" ]; then
+            docker login --username=$DOCKER_USERNAME --password=$DOCKER_PASSWORD pai-platform-registry.cn-beijing.cr.aliyuncs.com
 
-                # Push to pai-dlc as latest
-                docker tag ${docker_with_torchacc} registry.cn-${region}.aliyuncs.com/pai-dlc/${docker_with_torchacc}
-                docker push registry.cn-${region}.aliyuncs.com/pai-dlc/${docker_with_torchacc}
+            # Push to pai-dlc as latest
+            docker tag ${docker_with_torchacc} pai-platform-registry.cn-beijing.cr.aliyuncs.com/pai/${docker_with_torchacc}
+            docker push pai-platform-registry.cn-beijing.cr.aliyuncs.com/pai/${docker_with_torchacc}
 
-                # Push to pai-dlc with date
-                docker tag ${docker_with_torchacc} registry.cn-${region}.aliyuncs.com/pai-dlc/${docker_with_torchacc}${docker_with_torchacc_suffix}
-                docker push registry.cn-${region}.aliyuncs.com/pai-dlc/${docker_with_torchacc}${docker_with_torchacc_suffix}
-            else
-                echo "No docker login information found. Skip uploading to docker hub."
-            fi
-        done
+            # Push to pai-dlc with date
+            docker tag ${docker_with_torchacc} pai-platform-registry.cn-beijing.cr.aliyuncs.com/pai/${docker_with_torchacc}${docker_with_torchacc_suffix}
+            docker push pai-platform-registry.cn-beijing.cr.aliyuncs.com/pai/${docker_with_torchacc}${docker_with_torchacc_suffix}
+        else
+            echo "No docker login information found. Skip uploading to docker hub."
+        fi
     fi
 }
 
