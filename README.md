@@ -45,7 +45,7 @@ It utilizes IR abstractions at different layers and employs static graph compila
 
 ### Docker
 ```
-sudo docker run  --gpus all --net host --ipc host --shm-size 10G -it --rm --cap-add=SYS_PTRACE registry.cn-hangzhou.aliyuncs.com/pai-dlc/acc:r2.3.0-cuda12.1.0-py3.10 bash
+sudo docker run  --gpus all --net host --ipc host --shm-size 10G -it --rm --cap-add=SYS_PTRACE dsw-registry.cn-hangzhou.cr.aliyuncs.com/pai/acc:r2.3.0-cuda12.1.0-py3.10 bash
 ```
 
 ### Build from source

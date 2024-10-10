@@ -12,7 +12,7 @@ The following will use the `run_clm.py` example script from the Transformers lib
 Refer to the `"install"` section to obtain the latest image:
 
 ```bash
-sudo docker run --gpus all --net host --ipc host --shm-size 10G -it --rm --cap-add=SYS_PTRACE registry.cn-wulanchabu.aliyuncs.com/pai-dlc/acc:r2.3.0-cuda12.1.0-py3.10-nightly bash
+sudo docker run --gpus all --net host --ipc host --shm-size 10G -it --rm --cap-add=SYS_PTRACE dsw-registry.cn-hangzhou.cr.aliyuncs.com/pai/acc:r2.3.0-cuda12.1.0-py3.10-nightly bash
 ```
 
 ### Environment Configuration

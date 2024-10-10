@@ -5,13 +5,20 @@
 It is recommended to use the existing release image directly. The image address is:
 
 ```bash
-registry.<region>.aliyuncs.com/pai-dlc/acc:r2.3.0-cuda12.1.0-py3.10
+dsw-registry.<region>.cr.aliyuncs.com/pai/acc:r2.3.0-cuda12.1.0-py3.10
 ```
 
 Replace `<region>` with one of the following as needed:
 
+* cn-beijing
 * cn-hangzhou
 * cn-wulanchabu
+* cn-shenzhen
+* cn-shanghai
+* cn-hongkong
+* ap-southeast-1
+* ap-southeast-3
+* us-east-1
 
 
 ## Building from Source
