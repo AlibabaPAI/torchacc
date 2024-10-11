@@ -8,11 +8,13 @@ from typing import Dict
 import torch
 import torch.nn.functional as F
 
+
 def _numel(shape):
     numel = 1
     for d in shape:
         numel *= d
     return numel
+
 
 def unflatten_params(params, param_names, param_shapes, param_numels):
     if params.dim() == 0:
@@ -74,7 +76,7 @@ def get_layer_full_info(shard_metadata, model_state_dict):
                 prefix = ".".join(name_splits[:idx])
                 suffix = ".".join(name_splits[idx:])
                 break
-            
+
         sharded_list.append(is_sharded)
         if is_sharded:
             p_info = shard_metadata["shard_info"][prefix][suffix]
@@ -119,7 +121,8 @@ def get_layer_full_info(shard_metadata, model_state_dict):
                 layer_size_list_.append(param_shapes)
                 layer_numel_list_.append(param_numel)
 
-        return (layer_name_list_, layer_size_list_, layer_numel_list_, sharded_list)
+        return (layer_name_list_, layer_size_list_, layer_numel_list_,
+                sharded_list)
 
     # return with lists
     layer_name_list = [[
@@ -130,48 +133,51 @@ def get_layer_full_info(shard_metadata, model_state_dict):
 
     return (layer_name_list, layer_size_list, layer_numel_list, sharded_list)
 
+
 def load_checkpoints(ckpt_dir, ckpt_name="*.pth"):
-  ckpt_path_pattern = ckpt_dir + ckpt_name
-  ckpt_paths = glob(ckpt_path_pattern)
+    ckpt_path_pattern = ckpt_dir + ckpt_name
+    ckpt_paths = glob(ckpt_path_pattern)
 
-  checkpoints_and_paths = []
-  
-  def load_ckpt(path):
-      ckpt = torch.load(path, map_location="cpu")
-      checkpoints_and_paths.append((ckpt, path))
-  
-  threads = []
-  
-  for path in ckpt_paths:
-    thread = threading.Thread(target=load_ckpt, args=(path,))
-    threads.append(thread)
-    thread.start()
+    checkpoints_and_paths = []
 
-  for thread in threads:
-    thread.join()
+    def load_ckpt(path):
+        ckpt = torch.load(path, map_location="cpu")
+        checkpoints_and_paths.append((ckpt, path))
 
-  checkpoints_and_paths.sort(key=lambda c: c[0]["shard_metadata"]["rank"])
-  checkpoints = [c[0] for c in checkpoints_and_paths]
-  for rank, (ckpt, path) in enumerate(checkpoints_and_paths):
-    assert ckpt["shard_metadata"]["world_size"] == len(checkpoints), (
-        f'Expecting {ckpt["shard_metadata"]["world_size"]} files '
-        f"(based on metadata in {path}) but got {len(checkpoints)} files. "
-        f"Please check if you have missing or unexpected files in {ckpt_path_pattern}."
-    )
-    assert ckpt["shard_metadata"]["rank"] == rank, (
-        f'Expecting rank {ckpt["shard_metadata"]["rank"]} for {path} but it is '
-        f"ranked {rank} (out of {len(checkpoints)} files). "
-        f"Please check if you have missing or unexpected files in {ckpt_path_pattern}."
-    )
-    
-    return checkpoints
+    threads = []
 
-def save_checkpoints(state_dict_list, shard_metadata_list, save_paths, save_type):
+    for path in ckpt_paths:
+        thread = threading.Thread(target=load_ckpt, args=(path,))
+        threads.append(thread)
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+    checkpoints_and_paths.sort(key=lambda c: c[0]["shard_metadata"]["rank"])
+    checkpoints = [c[0] for c in checkpoints_and_paths]
+    for rank, (ckpt, path) in enumerate(checkpoints_and_paths):
+        assert ckpt["shard_metadata"]["world_size"] == len(checkpoints), (
+            f'Expecting {ckpt["shard_metadata"]["world_size"]} files '
+            f"(based on metadata in {path}) but got {len(checkpoints)} files. "
+            f"Please check if you have missing or unexpected files in {ckpt_path_pattern}."
+        )
+        assert ckpt["shard_metadata"]["rank"] == rank, (
+            f'Expecting rank {ckpt["shard_metadata"]["rank"]} for {path} but it is '
+            f"ranked {rank} (out of {len(checkpoints)} files). "
+            f"Please check if you have missing or unexpected files in {ckpt_path_pattern}."
+        )
+
+        return checkpoints
+
+
+def save_checkpoints(state_dict_list, shard_metadata_list, save_paths,
+                     save_type):
     if not isinstance(state_dict_list, list):
         torch.save(state_dict_list, save_paths)
         return
 
-    def save_checkpoint(state_dict,shard_metadata, save_path, save_type):
+    def save_checkpoint(state_dict, shard_metadata, save_path, save_type):
         model = {
             f"{save_type}": state_dict,
             "shard_metadata": shard_metadata,
@@ -181,54 +187,62 @@ def save_checkpoints(state_dict_list, shard_metadata_list, save_paths, save_type
     threads = []
     #import pdb
     #pdb.set_trace()
-    for state_dict, shard_metadata, save_path in zip(state_dict_list, shard_metadata_list, save_paths):
-        thread = threading.Thread(target=save_checkpoint, args=(state_dict, shard_metadata, save_path, save_type))
+    for state_dict, shard_metadata, save_path in zip(state_dict_list,
+                                                     shard_metadata_list,
+                                                     save_paths):
+        thread = threading.Thread(
+            target=save_checkpoint,
+            args=(state_dict, shard_metadata, save_path, save_type))
         threads.append(thread)
         thread.start()
 
     for thread in threads:
         thread.join()
-    
-    
-def consolidate_sharded_model_checkpoints(ckpt_dir,
-                                          checkpoints):
-  """
+
+
+def consolidate_sharded_model_checkpoints(ckpt_dir, checkpoints):
+    """
     Consolidate the sharded FSDP checkpoints into a single model checkpoint.
   """
 
-  state_dict_list = [ckpt["model"] for ckpt in checkpoints]
-  shard_metadata = checkpoints[0]["shard_metadata"]
-  layer_name_list, layer_size_list, layer_numel_list, sharded_list = get_layer_full_info(shard_metadata, state_dict_list[0])
-  file_path = ckpt_dir + "layer_info.pickle"
+    state_dict_list = [ckpt["model"] for ckpt in checkpoints]
+    shard_metadata = checkpoints[0]["shard_metadata"]
+    layer_name_list, layer_size_list, layer_numel_list, sharded_list = get_layer_full_info(
+        shard_metadata, state_dict_list[0])
+    file_path = ckpt_dir + "layer_info.pickle"
 
-  with open(file_path, 'wb') as f:
-    pickle.dump([layer_name_list, layer_size_list, layer_numel_list, sharded_list], f)
-    
-  full_state_dict = OrderedDict()
-  
-  # consolidate and unflatten per layer
-  for idx, (state_name, state_params) in enumerate(state_dict_list[0].items()):
-    layer_name = layer_name_list[idx]
-    layer_size = layer_size_list[idx]
-    layer_numel = layer_numel_list[idx]
-    is_sharded = sharded_list[idx]
-      
-    consolidate_params = state_params
-    if is_sharded:
-        p_shard_list = []
-        for state_dict in state_dict_list:
-            p_shard_list.append(state_dict[state_name])
-        consolidate_params = torch.cat(p_shard_list, dim=0)
-    orig_params = unflatten_params(consolidate_params, layer_name, layer_size, layer_numel)
+    with open(file_path, 'wb') as f:
+        pickle.dump(
+            [layer_name_list, layer_size_list, layer_numel_list, sharded_list],
+            f)
 
-    for fn, fp in zip(layer_name, orig_params):
-        full_state_dict[fn] = fp    
+    full_state_dict = OrderedDict()
 
-  return full_state_dict
+    # consolidate and unflatten per layer
+    for idx, (state_name,
+              state_params) in enumerate(state_dict_list[0].items()):
+        layer_name = layer_name_list[idx]
+        layer_size = layer_size_list[idx]
+        layer_numel = layer_numel_list[idx]
+        is_sharded = sharded_list[idx]
+
+        consolidate_params = state_params
+        if is_sharded:
+            p_shard_list = []
+            for state_dict in state_dict_list:
+                p_shard_list.append(state_dict[state_name])
+            consolidate_params = torch.cat(p_shard_list, dim=0)
+        orig_params = unflatten_params(consolidate_params, layer_name,
+                                       layer_size, layer_numel)
+
+        for fn, fp in zip(layer_name, orig_params):
+            full_state_dict[fn] = fp
+
+    return full_state_dict
 
 
-def consolidate_sharded_optimizer_checkpoints(ckpt_dir,
-                                              checkpoints, layer_info):
+def consolidate_sharded_optimizer_checkpoints(ckpt_dir, checkpoints,
+                                              layer_info):
     """
         Consolidate the sharded FSDP checkpoints into a single optimizer checkpoint.
     """
@@ -236,63 +250,63 @@ def consolidate_sharded_optimizer_checkpoints(ckpt_dir,
     shard_metadata = checkpoints[0]["shard_metadata"]
 
     layer_name_list, layer_size_list, layer_numel_list, sharded_list = layer_info
-    flatten_name_list = [
-            fn for layer_fn in layer_name_list for fn in layer_fn
-        ]
+    flatten_name_list = [fn for layer_fn in layer_name_list for fn in layer_fn]
 
-    full_optim_state_dict: Dict[str, Any] = {
-            'state': {},
-            'param_groups': {}
-        }
-    
-    full_optim_state_dict['param_groups'] = copy.deepcopy(optim_state_dict_list[0]['param_groups'])
+    full_optim_state_dict: Dict[str, Any] = {'state': {}, 'param_groups': {}}
+
+    full_optim_state_dict['param_groups'] = copy.deepcopy(
+        optim_state_dict_list[0]['param_groups'])
     full_optim_state_dict['param_groups'][0]['params'].clear()
-    
+
     for fn in flatten_name_list:
-        full_optim_state_dict['param_groups'][0][
-            'params'].append(fn)
-    
+        full_optim_state_dict['param_groups'][0]['params'].append(fn)
+
     unflat_state_dict = {fn: {} for fn in flatten_name_list}
-    
+
     # consolidate and unflatten per layer per state
-    for idx, layer_state in enumerate(optim_state_dict_list[0]['state'].values()):
+    for idx, layer_state in enumerate(
+            optim_state_dict_list[0]['state'].values()):
         layer_name = layer_name_list[idx]
         layer_size = layer_size_list[idx]
         layer_numel = layer_numel_list[idx]
         is_sharded = sharded_list[idx]
-        
+
         for state_name, state_param in layer_state.items():
             consolidate_params = state_param
             if is_sharded and state_param.dim() != 0:
                 p_shard_list = []
                 for optim_state_dict in optim_state_dict_list:
-                    p_shard_list.append(optim_state_dict['state'][idx][state_name])
-                   
+                    p_shard_list.append(
+                        optim_state_dict['state'][idx][state_name])
+
                 consolidate_params = torch.cat(p_shard_list, dim=0)
-            orig_params = unflatten_params(consolidate_params, layer_name, layer_size, layer_numel)
-            
+            orig_params = unflatten_params(consolidate_params, layer_name,
+                                           layer_size, layer_numel)
+
             for fn, fp in zip(layer_name, orig_params):
-                unflat_state_dict[fn][state_name] = fp    
+                unflat_state_dict[fn][state_name] = fp
     full_optim_state_dict['state'] = unflat_state_dict
 
     return full_optim_state_dict
+
 
 def _get_shard(tensor, shard_num):
     """
         Return the shard tensor list of a full flatten tensor.
     """
     if tensor.numel() % shard_num != 0:
-       pad_size = shard_num - tensor.numel() % shard_num
-       tensor = F.pad(tensor, [0, pad_size])
-    
+        pad_size = shard_num - tensor.numel() % shard_num
+        tensor = F.pad(tensor, [0, pad_size])
+
     local_size = tensor.size(0) // shard_num
     tensor_list = []
     for i in range(shard_num):
         begin = i * local_size
-        end = (i + 1) * local_size 
+        end = (i + 1) * local_size
         tensor_list.append(tensor[begin:end])
-        
+
     return tensor_list
+
 
 def flatten_tensor_list(param_list):
     if len(param_list) == 0:
@@ -302,27 +316,32 @@ def flatten_tensor_list(param_list):
 
     return torch.cat(flat_tensors, dim=0)
 
-def reshard_model_dict(consolidate_model_dict, shard_model, layer_name_lists, reshard_num):
+
+def reshard_model_dict(consolidate_model_dict, shard_model, layer_name_lists,
+                       reshard_num):
     """
         reshard the consolidate model into shard_model_state_dict_list according to the reshard_num.
         Return the shard_model_state_dict_list and shard_metadata_list.
     """
     shard_model_state_dict: Dict[str, Any] = {}
-    shard_model_state_dict_list = [copy.deepcopy(shard_model_state_dict) for _ in range(reshard_num)]
-    
+    shard_model_state_dict_list = [
+        copy.deepcopy(shard_model_state_dict) for _ in range(reshard_num)
+    ]
+
     # flatten and shard tensor per layer
-    for (shard_model_name, layer_names) in zip(shard_model['model'].keys(), layer_name_lists):
+    for (shard_model_name, layer_names) in zip(shard_model['model'].keys(),
+                                               layer_name_lists):
         tensor_buffer_list = []
         for name in layer_names:
-             tensor_buffer = consolidate_model_dict[name]
-             tensor_buffer_list.append(tensor_buffer)
-        flat_tensor = flatten_tensor_list(
-            tensor_buffer_list)
+            tensor_buffer = consolidate_model_dict[name]
+            tensor_buffer_list.append(tensor_buffer)
+        flat_tensor = flatten_tensor_list(tensor_buffer_list)
         shard_tensor_list = _get_shard(flat_tensor, reshard_num)
-        
-        for shard_tensor, shard_model_dict in zip(shard_tensor_list, shard_model_state_dict_list):
+
+        for shard_tensor, shard_model_dict in zip(shard_tensor_list,
+                                                  shard_model_state_dict_list):
             shard_model_dict[shard_model_name] = shard_tensor
-    
+
     # get shardmeta_list
     shard_metadata_list = []
     for idx in range(reshard_num):
@@ -330,27 +349,29 @@ def reshard_model_dict(consolidate_model_dict, shard_model, layer_name_lists, re
         shard_meta_data['world_size'] = reshard_num
         shard_meta_data['rank'] = idx
         shard_metadata_list.append(shard_meta_data)
-        
+
     return shard_model_state_dict_list, shard_metadata_list
 
 
-def reshard_optim_dict(consolidate_optim_dict, shard_optim, layer_name_lists, reshard_num):
+def reshard_optim_dict(consolidate_optim_dict, shard_optim, layer_name_lists,
+                       reshard_num):
     """
         reshard the consolidate optim into shard_optim_state_dict_list according to the reshard_num.
         Return the shard_optim_state_dict_list and shard_metadata_list.
     """
     consolidate_optim_state = consolidate_optim_dict['state']
-    
-    shard_optim_state_dict: Dict[str, Any] = {
-            'state': {},
-            'param_groups': {}
-        }
-    shard_optim_state_dict_list = [copy.deepcopy(shard_optim_state_dict) for _ in range(reshard_num)]
-    
+
+    shard_optim_state_dict: Dict[str, Any] = {'state': {}, 'param_groups': {}}
+    shard_optim_state_dict_list = [
+        copy.deepcopy(shard_optim_state_dict) for _ in range(reshard_num)
+    ]
+
     # flatten and shard tensor per layer per state_name
     for idx, layer_names in enumerate(layer_name_lists):
         shard_value: Dict[str, Any] = {}
-        shard_value_list = [copy.deepcopy(shard_value) for _ in range(reshard_num)]
+        shard_value_list = [
+            copy.deepcopy(shard_value) for _ in range(reshard_num)
+        ]
         for state_name in consolidate_optim_state[layer_names[0]].keys():
             tensor_buffer_list = []
             # we need the params of a whole layer state to be flatten and shard
@@ -358,37 +379,40 @@ def reshard_optim_dict(consolidate_optim_dict, shard_optim, layer_name_lists, re
                 state_params = consolidate_optim_state[name][state_name]
                 # state name 'step'
                 if isinstance(state_params,
-                                torch.Tensor) and state_params.dim() == 0:
+                              torch.Tensor) and state_params.dim() == 0:
                     for shard_value in shard_value_list:
                         shard_value[state_name] = state_params
                     break
-                
+
                 tensor_buffer_list.append(state_params)
 
-            flat_tensor = flatten_tensor_list(
-                tensor_buffer_list)
+            flat_tensor = flatten_tensor_list(tensor_buffer_list)
 
             if state_params.dim() != 0:
                 shard_tensor_list = _get_shard(flat_tensor, reshard_num)
-                for (shard_value, shard_tensor) in zip(shard_value_list, shard_tensor_list):
-                    shard_value[state_name] = shard_tensor 
+                for (shard_value, shard_tensor) in zip(shard_value_list,
+                                                       shard_tensor_list):
+                    shard_value[state_name] = shard_tensor
 
-        for (shard_value, shard_optim_state_dict) in zip(shard_value_list, shard_optim_state_dict_list):
+        for (shard_value,
+             shard_optim_state_dict) in zip(shard_value_list,
+                                            shard_optim_state_dict_list):
             shard_optim_state_dict['state'][idx] = shard_value
-    
+
     shard_metadata_list = []
 
     # get the param_group of optim_state_dict and shard_meta_lists
     for (idx, shard_optim_state_dict) in enumerate(shard_optim_state_dict_list):
-        shard_optim_state_dict['param_groups'] = shard_optim['optimizer']['param_groups']
+        shard_optim_state_dict['param_groups'] = shard_optim['optimizer'][
+            'param_groups']
 
         shard_meta_data = copy.deepcopy(shard_optim["shard_metadata"])
         shard_meta_data['world_size'] = reshard_num
         shard_meta_data['rank'] = idx
         shard_metadata_list.append(shard_meta_data)
-    
+
     return shard_optim_state_dict_list, shard_metadata_list
-        
+
 
 def consolidate_and_reshard_model_dict(ckpt_dir,
                                        ckpt_name="",
@@ -424,14 +448,16 @@ def consolidate_and_reshard_model_dict(ckpt_dir,
     Returns:
         model_state_dict: the consolidated model state dict or reshard model state dict list.
     """
-    
+
     checkpoints = load_checkpoints(ckpt_dir, ckpt_name)
-    full_state_dict = consolidate_sharded_model_checkpoints(ckpt_dir, checkpoints)
-    
+    full_state_dict = consolidate_sharded_model_checkpoints(
+        ckpt_dir, checkpoints)
+
     if reshard_num == 1:
         if save_model:
             actual_save_path = save_path if save_path else ckpt_dir + "model_consolidated.pth"
-            save_checkpoints(full_state_dict, checkpoints[0]['shard_metadata'], actual_save_path, 'model')
+            save_checkpoints(full_state_dict, checkpoints[0]['shard_metadata'],
+                             actual_save_path, 'model')
 
         return full_state_dict
     # load layer_info
@@ -442,25 +468,25 @@ def consolidate_and_reshard_model_dict(ckpt_dir,
             layer_info = pickle.load(f)
     except FileNotFoundError:
         print(f"please consolidate model first!")
-    
-    model_state_dict_list, shard_metadata_list = reshard_model_dict(full_state_dict, checkpoints[0], layer_info[0], reshard_num)
-    
-    
+
+    model_state_dict_list, shard_metadata_list = reshard_model_dict(
+        full_state_dict, checkpoints[0], layer_info[0], reshard_num)
+
     if save_model:
-      if save_path == "":
+        if save_path == "":
             save_path = ckpt_dir
-            
-      actual_save_path = [
+
+        actual_save_path = [
             f"rank-{rank}-of-{reshard_num}-model.pth"
             for rank in range(reshard_num)
         ]
-            
-      save_checkpoints(model_state_dict_list, shard_metadata_list, actual_save_path, 'model')
-    
-    
+
+        save_checkpoints(model_state_dict_list, shard_metadata_list,
+                         actual_save_path, 'model')
+
     return model_state_dict_list
-    
-    
+
+
 def consolidate_and_reshard_optim_dict(ckpt_dir,
                                        ckpt_name="",
                                        reshard_num=1,
@@ -475,7 +501,7 @@ def consolidate_and_reshard_optim_dict(ckpt_dir,
     """
     # load checkpoints
     checkpoints = load_checkpoints(ckpt_dir, ckpt_name)
-    
+
     # load layer_info
     file_path = ckpt_dir + "layer_info.pickle"
     layer_info = []
@@ -484,31 +510,35 @@ def consolidate_and_reshard_optim_dict(ckpt_dir,
             layer_info = pickle.load(f)
     except FileNotFoundError:
         print(f"please consolidate model first!")
-        
-    full_optim_state_dict = consolidate_sharded_optimizer_checkpoints(ckpt_dir, checkpoints, layer_info)
-    
+
+    full_optim_state_dict = consolidate_sharded_optimizer_checkpoints(
+        ckpt_dir, checkpoints, layer_info)
+
     actual_save_path = None
-    
+
     if reshard_num == 1:
         if save_optimizer:
             actual_save_path = save_path if save_path else ckpt_dir + "consolidated_optimizer.pth"
-            save_checkpoints(full_optim_state_dict, checkpoints[0]['shard_metadata'], actual_save_path, 'optimizer')
+            save_checkpoints(full_optim_state_dict,
+                             checkpoints[0]['shard_metadata'], actual_save_path,
+                             'optimizer')
 
         return full_optim_state_dict
 
-    optim_state_dict_list, shard_metadata_list = reshard_optim_dict(full_optim_state_dict, checkpoints[0], layer_info[0], reshard_num)
-    
-    
+    optim_state_dict_list, shard_metadata_list = reshard_optim_dict(
+        full_optim_state_dict, checkpoints[0], layer_info[0], reshard_num)
+
     if save_optimizer:
         if save_path == "":
             save_path = ckpt_dir
-    
+
         actual_save_path = [
             save_path + f"rank-{rank}-of-{reshard_num}-optimizer.pth"
             for rank in range(reshard_num)
         ]
         import pdb
         pdb.set_trace()
-        save_checkpoints(optim_state_dict_list, shard_metadata_list, actual_save_path, 'optimizer')
-    
+        save_checkpoints(optim_state_dict_list, shard_metadata_list,
+                         actual_save_path, 'optimizer')
+
     return optim_state_dict_list
