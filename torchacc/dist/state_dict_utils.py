@@ -2,6 +2,7 @@ from collections import OrderedDict
 import copy
 from glob import glob
 import pickle
+import os
 import threading
 from typing import Dict
 
@@ -135,9 +136,13 @@ def get_layer_full_info(shard_metadata, model_state_dict):
 
 
 def load_checkpoints(ckpt_dir, ckpt_name="*.pth"):
-    ckpt_path_pattern = ckpt_dir + ckpt_name
+    ckpt_path_pattern = os.path.join(ckpt_dir, "") + ckpt_name
+    #print(ckpt_dir)
+    #print(ckpt_name)
+    #print(ckpt_path_pattern)
     ckpt_paths = glob(ckpt_path_pattern)
-
+    #import pdb
+    #pdb.set_trace()
     checkpoints_and_paths = []
 
     def load_ckpt(path):
@@ -455,13 +460,14 @@ def consolidate_and_reshard_model_dict(ckpt_dir,
 
     if reshard_num == 1:
         if save_model:
-            actual_save_path = save_path if save_path else ckpt_dir + "model_consolidated.pth"
+            actual_save_path = save_path if save_path else os.path.join(
+                ckpt_dir, "consolidated_optimizer.pth")
             save_checkpoints(full_state_dict, checkpoints[0]['shard_metadata'],
                              actual_save_path, 'model')
 
         return full_state_dict
     # load layer_info
-    file_path = ckpt_dir + "layer_info.pickle"
+    file_path = cos.path.join(ckpt_dir, "layer_info.pickle")
     layer_info = []
     try:
         with open(file_path, 'rb') as f:
@@ -477,7 +483,7 @@ def consolidate_and_reshard_model_dict(ckpt_dir,
             save_path = ckpt_dir
 
         actual_save_path = [
-            save_path + f"rank-{rank}-of-{reshard_num}-model.pth"
+            os.path.join(save_path, f"rank-{rank}-of-{reshard_num}-model.pth")
             for rank in range(reshard_num)
         ]
 
@@ -503,7 +509,7 @@ def consolidate_and_reshard_optim_dict(ckpt_dir,
     checkpoints = load_checkpoints(ckpt_dir, ckpt_name)
 
     # load layer_info
-    file_path = ckpt_dir + "layer_info.pickle"
+    file_path = cos.path.join(ckpt_dir, "layer_info.pickle")
     layer_info = []
     try:
         with open(file_path, 'rb') as f:
@@ -518,7 +524,8 @@ def consolidate_and_reshard_optim_dict(ckpt_dir,
 
     if reshard_num == 1:
         if save_optimizer:
-            actual_save_path = save_path if save_path else ckpt_dir + "consolidated_optimizer.pth"
+            actual_save_path = save_path if save_path else os.path.join(
+                ckpt_dir, "consolidated_optimizer.pth")
             save_checkpoints(full_optim_state_dict,
                              checkpoints[0]['shard_metadata'], actual_save_path,
                              'optimizer')
@@ -533,7 +540,8 @@ def consolidate_and_reshard_optim_dict(ckpt_dir,
             save_path = ckpt_dir
 
         actual_save_path = [
-            save_path + f"rank-{rank}-of-{reshard_num}-optimizer.pth"
+            os.path.join(save_path,
+                         f"rank-{rank}-of-{reshard_num}-optimizer.pth")
             for rank in range(reshard_num)
         ]
 
