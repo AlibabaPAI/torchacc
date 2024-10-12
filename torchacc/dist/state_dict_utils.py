@@ -303,7 +303,7 @@ def _get_shard(tensor, shard_num):
     for i in range(shard_num):
         begin = i * local_size
         end = (i + 1) * local_size
-        tensor_list.append(tensor[begin:end])
+        tensor_list.append(tensor[begin:end].clone())
 
     return tensor_list
 
