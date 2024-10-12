@@ -182,11 +182,11 @@ def save_checkpoints(state_dict_list, shard_metadata_list, save_paths,
             f"{save_type}": state_dict,
             "shard_metadata": shard_metadata,
         }
+
         torch.save(model, save_path)
 
     threads = []
-    #import pdb
-    #pdb.set_trace()
+
     for state_dict, shard_metadata, save_path in zip(state_dict_list,
                                                      shard_metadata_list,
                                                      save_paths):
@@ -477,7 +477,7 @@ def consolidate_and_reshard_model_dict(ckpt_dir,
             save_path = ckpt_dir
 
         actual_save_path = [
-            f"rank-{rank}-of-{reshard_num}-model.pth"
+            save_path + f"rank-{rank}-of-{reshard_num}-model.pth"
             for rank in range(reshard_num)
         ]
 
@@ -536,8 +536,7 @@ def consolidate_and_reshard_optim_dict(ckpt_dir,
             save_path + f"rank-{rank}-of-{reshard_num}-optimizer.pth"
             for rank in range(reshard_num)
         ]
-        import pdb
-        pdb.set_trace()
+
         save_checkpoints(optim_state_dict_list, shard_metadata_list,
                          actual_save_path, 'optimizer')
 
