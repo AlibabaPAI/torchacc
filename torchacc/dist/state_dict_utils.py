@@ -135,24 +135,24 @@ def get_layer_full_info(shard_metadata, model_state_dict):
     return (layer_name_list, layer_size_list, layer_numel_list, sharded_list)
 
 
-def load_checkpoints(ckpt_dir, ckpt_name="*.pth"):
-    ckpt_path_pattern = os.path.join(ckpt_dir, "") + ckpt_name
-    #print(ckpt_dir)
-    #print(ckpt_name)
-    #print(ckpt_path_pattern)
+def load_checkpoints(ckpt_dir, ckpt_name):
+    """
+    Load checkpoints that match the pattern of `ckpt_dir + ckpt_name`.
+    We use multiple thread to accelerate the loading progress, each thread
+    load one shard checkpoint.
+    """
+    ckpt_path_pattern = os.path.join(ckpt_dir, ckpt_name)
     ckpt_paths = glob(ckpt_path_pattern)
-    #import pdb
-    #pdb.set_trace()
-    checkpoints_and_paths = []
+    checkpoints_and_paths = [[] for _ in range(len(ckpt_paths))]
 
-    def load_ckpt(path):
+    def load_ckpt(path, idx):
         ckpt = torch.load(path, map_location="cpu")
-        checkpoints_and_paths.append((ckpt, path))
+        checkpoints_and_paths[idx] = (ckpt, path)
 
     threads = []
 
-    for path in ckpt_paths:
-        thread = threading.Thread(target=load_ckpt, args=(path,))
+    for idx, path in enumerate(ckpt_paths):
+        thread = threading.Thread(target=load_ckpt, args=(path, idx))
         threads.append(thread)
         thread.start()
 
@@ -178,6 +178,11 @@ def load_checkpoints(ckpt_dir, ckpt_name="*.pth"):
 
 def save_checkpoints(state_dict_list, shard_metadata_list, save_paths,
                      save_type):
+    """
+    Save checkpoints to save_paths.
+    We use multiple thread to accelerate the saving progress, each thread
+    save one shard checkpoint.
+    """
     if not isinstance(state_dict_list, list):
         torch.save(state_dict_list, save_paths)
         return
@@ -208,8 +213,8 @@ def save_checkpoints(state_dict_list, shard_metadata_list, save_paths,
 def consolidate_sharded_model_checkpoints(ckpt_dir, checkpoints):
     """
     Consolidate the sharded FSDP checkpoints into a single model checkpoint.
-  """
-
+    Release the tensor in sharded FSDP checkpoints immediately to save memory.
+    """
     state_dict_list = [ckpt["model"] for ckpt in checkpoints]
     shard_metadata = checkpoints[0]["shard_metadata"]
     layer_name_list, layer_size_list, layer_numel_list, sharded_list = get_layer_full_info(
@@ -236,7 +241,10 @@ def consolidate_sharded_model_checkpoints(ckpt_dir, checkpoints):
             p_shard_list = []
             for state_dict in state_dict_list:
                 p_shard_list.append(state_dict[state_name])
+                state_dict[state_name] = None
+
             consolidate_params = torch.cat(p_shard_list, dim=0)
+
         orig_params = unflatten_params(consolidate_params, layer_name,
                                        layer_size, layer_numel)
 
@@ -249,7 +257,8 @@ def consolidate_sharded_model_checkpoints(ckpt_dir, checkpoints):
 def consolidate_sharded_optimizer_checkpoints(ckpt_dir, checkpoints,
                                               layer_info):
     """
-        Consolidate the sharded FSDP checkpoints into a single optimizer checkpoint.
+    Consolidate the sharded FSDP checkpoints into a single optimizer checkpoint.
+    Release the tensor in sharded FSDP checkpoints immediately to save memory.
     """
     optim_state_dict_list = [ckpt['optimizer'] for ckpt in checkpoints]
     shard_metadata = checkpoints[0]["shard_metadata"]
@@ -283,8 +292,10 @@ def consolidate_sharded_optimizer_checkpoints(ckpt_dir, checkpoints,
                 for optim_state_dict in optim_state_dict_list:
                     p_shard_list.append(
                         optim_state_dict['state'][idx][state_name])
+                    optim_state_dict['state'][idx][state_name] = None
 
                 consolidate_params = torch.cat(p_shard_list, dim=0)
+
             orig_params = unflatten_params(consolidate_params, layer_name,
                                            layer_size, layer_numel)
 
@@ -297,7 +308,7 @@ def consolidate_sharded_optimizer_checkpoints(ckpt_dir, checkpoints,
 
 def _get_shard(tensor, shard_num):
     """
-        Return the shard tensor list of a full flatten tensor.
+    Return the shard tensor list of a full flatten tensor.
     """
     if tensor.numel() % shard_num != 0:
         pad_size = shard_num - tensor.numel() % shard_num
@@ -325,8 +336,9 @@ def flatten_tensor_list(param_list):
 def reshard_model_dict(consolidate_model_dict, shard_model, layer_name_lists,
                        reshard_num):
     """
-        reshard the consolidate model into shard_model_state_dict_list according to the reshard_num.
-        Return the shard_model_state_dict_list and shard_metadata_list.
+    reshard the consolidate model into shard_model_state_dict_list according to the reshard_num.
+    Release tensor in consolidate_model_dict immediately to save tensor.
+    Return the shard_model_state_dict_list and shard_metadata_list.
     """
     shard_model_state_dict: Dict[str, Any] = {}
     shard_model_state_dict_list = [
@@ -340,6 +352,7 @@ def reshard_model_dict(consolidate_model_dict, shard_model, layer_name_lists,
         for name in layer_names:
             tensor_buffer = consolidate_model_dict[name]
             tensor_buffer_list.append(tensor_buffer)
+            consolidate_model_dict[name] = None
         flat_tensor = flatten_tensor_list(tensor_buffer_list)
         shard_tensor_list = _get_shard(flat_tensor, reshard_num)
 
@@ -361,8 +374,9 @@ def reshard_model_dict(consolidate_model_dict, shard_model, layer_name_lists,
 def reshard_optim_dict(consolidate_optim_dict, shard_optim, layer_name_lists,
                        reshard_num):
     """
-        reshard the consolidate optim into shard_optim_state_dict_list according to the reshard_num.
-        Return the shard_optim_state_dict_list and shard_metadata_list.
+    reshard the consolidate optim into shard_optim_state_dict_list according to the reshard_num.
+    Release tensor in consolidate_optim_dict immediately to save tensor.
+    Return the shard_optim_state_dict_list and shard_metadata_list.
     """
     consolidate_optim_state = consolidate_optim_dict['state']
 
@@ -382,6 +396,8 @@ def reshard_optim_dict(consolidate_optim_dict, shard_optim, layer_name_lists,
             # we need the params of a whole layer state to be flatten and shard
             for name in layer_names:
                 state_params = consolidate_optim_state[name][state_name]
+                consolidate_optim_state[name][state_name] = None
+
                 # state name 'step'
                 if isinstance(state_params,
                               torch.Tensor) and state_params.dim() == 0:
@@ -467,7 +483,7 @@ def consolidate_and_reshard_model_dict(ckpt_dir,
 
         return full_state_dict
     # load layer_info
-    file_path = cos.path.join(ckpt_dir, "layer_info.pickle")
+    file_path = os.path.join(ckpt_dir, "layer_info.pickle")
     layer_info = []
     try:
         with open(file_path, 'rb') as f:
@@ -509,7 +525,7 @@ def consolidate_and_reshard_optim_dict(ckpt_dir,
     checkpoints = load_checkpoints(ckpt_dir, ckpt_name)
 
     # load layer_info
-    file_path = cos.path.join(ckpt_dir, "layer_info.pickle")
+    file_path = os.path.join(ckpt_dir, "layer_info.pickle")
     layer_info = []
     try:
         with open(file_path, 'rb') as f:
