@@ -519,7 +519,7 @@ def consolidate_and_reshard_optim_dict(ckpt_dir,
     reshard the FSDP optimizer according to the reshard_num.
 
     Returns:
-        optim_state_dict: the consolidated model state dict or reshard model state dict list
+        optim_state_dict: the consolidated optim state dict or reshard optim state dict list
     """
     # load checkpoints
     checkpoints = load_checkpoints(ckpt_dir, ckpt_name)
