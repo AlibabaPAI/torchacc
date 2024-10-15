@@ -183,6 +183,7 @@ def save_checkpoints(state_dict_list, shard_metadata_list, save_paths,
     We use multiple thread to accelerate the saving progress, each thread
     save one shard checkpoint.
     """
+    # save consolidate checkpoint
     if not isinstance(state_dict_list, list):
         torch.save(state_dict_list, save_paths)
         return
@@ -196,7 +197,7 @@ def save_checkpoints(state_dict_list, shard_metadata_list, save_paths,
         torch.save(model, save_path)
 
     threads = []
-
+    # save reshard checkpoints
     for state_dict, shard_metadata, save_path in zip(state_dict_list,
                                                      shard_metadata_list,
                                                      save_paths):
