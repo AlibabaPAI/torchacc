@@ -86,7 +86,7 @@ def train(args, model, device, train_loader, optimizer, scaler):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
+    parser = argparse.ArgumentParser(description='Torchacc Offload Example')
     parser.add_argument(
         '--batch-size',
         type=int,
@@ -115,6 +115,7 @@ def main():
     device = dist.get_rank()
     model = Net()
     model.to(device)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     scaler = torch.cuda.amp.GradScaler()
 

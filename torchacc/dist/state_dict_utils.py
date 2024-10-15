@@ -219,8 +219,8 @@ def consolidate_sharded_model_checkpoints(ckpt_dir, checkpoints):
     shard_metadata = checkpoints[0]["shard_metadata"]
     layer_name_list, layer_size_list, layer_numel_list, sharded_list = get_layer_full_info(
         shard_metadata, state_dict_list[0])
-    file_path = ckpt_dir + "layer_info.pickle"
 
+    file_path = os.path.join(ckpt_dir, "layer_info.pickle")
     with open(file_path, 'wb') as f:
         pickle.dump(
             [layer_name_list, layer_size_list, layer_numel_list, sharded_list],
@@ -468,6 +468,7 @@ def consolidate_and_reshard_model_dict(ckpt_dir,
 
     Returns:
         model_state_dict: the consolidated model state dict or reshard model state dict list.
+        shard_meta_list: the reshard metadatalist. The consolidated model return None.
     """
 
     checkpoints = load_checkpoints(ckpt_dir, ckpt_name)
@@ -481,7 +482,7 @@ def consolidate_and_reshard_model_dict(ckpt_dir,
             save_checkpoints(full_state_dict, checkpoints[0]['shard_metadata'],
                              actual_save_path, 'model')
 
-        return full_state_dict
+        return full_state_dict, None
     # load layer_info
     file_path = os.path.join(ckpt_dir, "layer_info.pickle")
     layer_info = []
@@ -506,7 +507,7 @@ def consolidate_and_reshard_model_dict(ckpt_dir,
         save_checkpoints(model_state_dict_list, shard_metadata_list,
                          actual_save_path, 'model')
 
-    return model_state_dict_list
+    return model_state_dict_list, shard_metadata_list
 
 
 def consolidate_and_reshard_optim_dict(ckpt_dir,
@@ -520,6 +521,7 @@ def consolidate_and_reshard_optim_dict(ckpt_dir,
 
     Returns:
         optim_state_dict: the consolidated optim state dict or reshard optim state dict list
+        shard_meta_list: the reshard metadatalist. The consolidated optim return None.
     """
     # load checkpoints
     checkpoints = load_checkpoints(ckpt_dir, ckpt_name)
@@ -546,7 +548,7 @@ def consolidate_and_reshard_optim_dict(ckpt_dir,
                              checkpoints[0]['shard_metadata'], actual_save_path,
                              'optimizer')
 
-        return full_optim_state_dict
+        return full_optim_state_dict, None
 
     optim_state_dict_list, shard_metadata_list = reshard_optim_dict(
         full_optim_state_dict, checkpoints[0], layer_info[0], reshard_num)
@@ -564,4 +566,4 @@ def consolidate_and_reshard_optim_dict(ckpt_dir,
         save_checkpoints(optim_state_dict_list, shard_metadata_list,
                          actual_save_path, 'optimizer')
 
-    return optim_state_dict_list
+    return optim_state_dict_list, shard_metadata_list
