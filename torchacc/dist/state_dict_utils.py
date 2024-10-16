@@ -2,6 +2,7 @@ import copy
 import os
 import pickle
 import threading
+import re
 from collections import OrderedDict
 from glob import glob
 from typing import Dict
@@ -505,12 +506,10 @@ def consolidate_and_reshard_fsdp_model_dict(ckpt_dir,
 
         actual_save_path = []
         for idx in range(reshard_num):
-            save_name_ = re.sub(
-                r'\*',
-                lambda m: str(idx) if m.group(0) == '*' else str(reshard_num),
-                save_name,
-                count=2)
-            actual_save_path.append(os.path.join(save_dir, save_name_))
+            # replace the two '*'
+            save_name_temp = save_name.replace('*', str(idx), 1)
+            save_name_temp = save_name_temp.replace('*', str(reshard_num), 1)
+            actual_save_path.append(os.path.join(save_dir, save_name_temp))
 
         save_checkpoints(model_state_dict_list, shard_metadata_list,
                          actual_save_path, 'model')
@@ -588,12 +587,10 @@ def consolidate_and_reshard_fsdp_optim_dict(ckpt_dir,
 
         actual_save_path = []
         for idx in range(reshard_num):
-            save_name_ = re.sub(
-                r'\*',
-                lambda m: str(idx) if m.group(0) == '*' else str(reshard_num),
-                save_name,
-                count=2)
-            actual_save_path.append(os.path.join(save_dir, save_name_))
+            # replace the two '*'
+            save_name_temp = save_name.replace('*', str(idx), 1)
+            save_name_temp = save_name_temp.replace('*', str(reshard_num), 1)
+            actual_save_path.append(os.path.join(save_dir, save_name_temp))
 
         save_checkpoints(optim_state_dict_list, shard_metadata_list,
                          actual_save_path, 'optimizer')
