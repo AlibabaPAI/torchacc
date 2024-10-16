@@ -1,10 +1,11 @@
 from argparse import ArgumentParser
 
-from torchacc.dist.state_dict_utils import (consolidate_and_reshard_model_dict,
-                                            consolidate_and_reshard_optim_dict)
+from torchacc.dist.state_dict_utils import (
+    consolidate_and_reshard_fsdp_model_dict,
+    consolidate_and_reshard_fsdp_optim_dict)
 
-MODEL_NAME_PATTERN = "rank*-of-*-model.pth"
-OPTIM_NAME_PATTERN = "rank*-of-*-optimizer.pth"
+DEFAULT_MODEL_NAME_PATTERN = "rank*-of-*-model.pth"
+DEFAULT_OPTIM_NAME_PATTERN = "rank*-of-*-optimizer.pth"
 
 
 def main():
@@ -14,24 +15,25 @@ def main():
         type=str,
         required=True,
         help=(
-            f"The name pattern of the XLA FSDP checkpoint files to be consolidated. "
+            f"The name dir of the XLA FSDP checkpoint files to be consolidated and reshard. "
             f"Files matching the pattern ``ckpt_dir + ckpt_name`` will be loaded."
-            f"For model, the default pattern is {MODEL_NAME_PATTERN}. For optimizer,"
-            f"the default pattern is {OPTIM_NAME_PATTERN}"),
+            f"For model, the default pattern is {DEFAULT_MODEL_NAME_PATTERN}. For optimizer,"
+            f"the default pattern is {DEFAULT_OPTIM_NAME_PATTERN}"),
     )
     parser.add_argument(
         "--ckpt_name",
         type=str,
         default="",
         help=(
-            f"The name pattern of the XLA FSDP checkpoint files to be consolidated. "
+            f"The name pattern of the XLA FSDP checkpoint files to be consolidated and reshard. "
             f"Files matching the pattern ``ckpt_dir + ckpt_name`` will be loaded."
-            f"For model, the default pattern is {MODEL_NAME_PATTERN}. For optimizer,"
-            f"the default pattern is {OPTIM_NAME_PATTERN}"),
+            f"For model, the default pattern is {DEFAULT_MODEL_NAME_PATTERN}. For optimizer,"
+            f"the default pattern is {DEFAULT_OPTIM_NAME_PATTERN}"),
     )
     parser.add_argument(
         "--ckpt_type",
         type=str,
+        choices=["model", "optimizer"],
         default="model",
         help=(
             "The type of checkpoint to consolidate, you can choose model or optimizer. Please consolidate model fisrt, and then consolidate optimizer."
@@ -43,32 +45,62 @@ def main():
         default=1,
         help=(
             "We now support the reshard of XLA FSDP checkpoint according to the reshard_num."
-        ))
+        ),
+    )
     parser.add_argument(
-        "--save_path",
+        "--save_dir",
         type=str,
         default="",
         help=(
-            f"The save path of the output state dict "
-            f"(default consolidate_path is ``ckpt_dir + model/optimizer_consolidated.pth``)"
-            f"If you need to reshard the checkpoint, please only pass the save_dir(default is ckpt_dir),"
-            f"we will save the file in path ``save_path + {MODEL_NAME_PATTERN}/{OPTIM_NAME_PATTERN}``"
+            f"The save dir of the output checkpoint files, the default value will be set to arg: ckpt_dir."
+            f"Files will be saved in path: ``save_dir + save_name``."
+            f"For consolidated checkpoint, the default path is: ``save_dir + model/optimizer_consolidated.pth``."
+            f"For reshard checkpoints, the default path is: ``save_dir + {DEFULT_MODEL_NAME_PATTERN}/{DEFAULT_OPTIM_NAME_PATTERN}``."
         ),
     )
+    parser.add_argument(
+        "--save_name",
+        type=str,
+        default="",
+        help=(
+            f"The save name pattern of the output checkpoint files, the default value is {DEFULT_MODEL_NAME_PATTERN}/{DEFAULT_OPTIM_NAME_PATTERN}."
+            f"Files will be saved in path: ``save_dir + save_name`.`"
+            f"For consolidated checkpoint, the default path is: ``save_dir + model/optimizer_consolidated.pth``"
+            f"For reshard checkpoints, the default path is: ``save_dir + {DEFULT_MODEL_NAME_PATTERN}/{DEFAULT_OPTIM_NAME_PATTERN}``."
+            f"For reshard checkpoints, please use the same name patthern as {DEFULT_MODEL_NAME_PATTERN} and {DEFAULT_OPTIM_NAME_PATTERN}."
+        ),
+    )
+
     args = parser.parse_args()
-    assert args.ckpt_type in ['model', 'optimizer'
-                             ], ('the ckpt_type should be model or optimizer')
 
     if args.ckpt_type == "model":
         if args.ckpt_name == "":
-            args.ckpt_name = MODEL_NAME_PATTERN
-        consolidate_and_reshard_model_dict(args.ckpt_dir, args.ckpt_name,
-                                           args.reshard_num, args.save_path)
+            args.ckpt_name = DEFULT_MODEL_NAME_PATTERN
+        if args.save_path == "":
+            args.save_path = args.ckpt_dir
+        if args.save_name == "":
+            if args.reshard_name == 1:
+                args.save_name = "model_consolidated.pth"
+            else:
+                args.save_name = DEFAULT_MODEL_NAME_PATTERN
+
+        consolidate_and_reshard_fsdp_model_dict(args.ckpt_dir, args.ckpt_name,
+                                                args.save_dir, args.save_name,
+                                                args.reshard_num)
     else:
         if args.ckpt_name == "":
-            args.ckpt_name = OPTIM_NAME_PATTERN
-        consolidate_and_reshard_optim_dict(args.ckpt_dir, args.ckpt_name,
-                                           args.reshard_num, args.save_path)
+            args.ckpt_name = DEFULT_MODEL_NAME_PATTERN
+        if args.save_path == "":
+            args.save_path = args.ckpt_dir
+        if args.save_name == "":
+            if args.reshard_name == 1:
+                args.save_name = "optimizer_consolidated.pth"
+            else:
+                args.save_name = DEFAULT_OPTIM_NAME_PATTERN
+
+        consolidate_and_reshard_fsdp_optim_dict(args.ckpt_dir, args.ckpt_name,
+                                                args.save_dir, args.save_name,
+                                                args.reshard_num)
 
 
 if __name__ == "__main__":

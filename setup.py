@@ -32,6 +32,13 @@ setup_info = dict(
     packages=['torchacc'] + ['torchacc.' + \
                              pkg for pkg in find_packages('torchacc')],
 
+    # add console_scripts
+    entry_points={
+        'console_scripts': [
+            'consolidate_and_reshape_ckpts = torchacc.utils.consolidate_and_reshard_ckpts:main',
+        ],
+    },
+
     # Add _ prefix to the names of temporary build dirs
     options={'build': {'build_base': '_build'}, },
     zip_safe=True,

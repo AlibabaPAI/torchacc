@@ -202,17 +202,17 @@ def main(args):
             ckpt_dir=ckpt_dir,
             ckpt_name=f"rank*-of-*-model.pth",
             reshard_num=reshard_num,
-            save_model=True,
+            save_model=False,
         )
-        print(f"model consolidate and reshard to path:{ckpt_dir}")
+        print(f"model consolidate and reshard done.")
 
         optim_reshard_dicts, _ = consolidate_and_reshard_optim_dict(
             ckpt_dir=ckpt_dir,
             ckpt_name=f"rank*-of-*-optim.pth",
             reshard_num=reshard_num,
-            save_optimizer=True,
+            save_optimizer=False,
         )
-        print(f"optimizer consolidate and reshard to path:{ckpt_dir}")
+        print(f"optimizer consolidate and reshard done.")
 
         # compare shard model and optimizer
         if reshard_num == fsdp_num:
