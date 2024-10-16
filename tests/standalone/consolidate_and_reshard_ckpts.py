@@ -4,8 +4,9 @@ import os
 import torch
 import torch_xla.core.xla_model as xm
 import torchacc as ta
-from torchacc.dist.state_dict_utils import consolidate_and_reshard_model_dict, consolidate_and_reshard_optim_dict, load_checkpoints
-
+from torchacc.dist.state_dict_utils import (consolidate_and_reshard_model_dict,
+                                            consolidate_and_reshard_optim_dict,
+                                            load_checkpoints)
 from utils import EchoDataset, set_seed
 
 
@@ -156,11 +157,6 @@ def main(args):
     device = model.device
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
-
-    scaler = ta.amp.GradScaler() if args.fp16 else None
-
-    amp_dtype = torch.float16 if args.fp16 else torch.bfloat16
-    amp_enabled = args.fp16 or args.bf16
 
     train_loader = EchoDataset(
         data=[

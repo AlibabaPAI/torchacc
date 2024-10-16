@@ -1,9 +1,9 @@
-from collections import OrderedDict
 import copy
-from glob import glob
-import pickle
 import os
+import pickle
 import threading
+from collections import OrderedDict
+from glob import glob
 from typing import Dict
 
 import torch

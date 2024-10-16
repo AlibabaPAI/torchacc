@@ -1,5 +1,7 @@
 from argparse import ArgumentParser
-from torchacc.dist.state_dict_utils import consolidate_and_reshard_model_dict, consolidate_and_reshard_optim_dict
+
+from torchacc.dist.state_dict_utils import (consolidate_and_reshard_model_dict,
+                                            consolidate_and_reshard_optim_dict)
 
 MODEL_NAME_PATTERN = "rank*-of-*-model.pth"
 OPTIM_NAME_PATTERN = "rank*-of-*-optimizer.pth"
