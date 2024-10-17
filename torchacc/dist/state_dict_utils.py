@@ -438,9 +438,9 @@ def reshard_optim_dict(consolidate_optim_dict, shard_optim, layer_name_lists,
 
 
 def consolidate_and_reshard_fsdp_model_dict(ckpt_dir,
-                                            ckpt_name,
+                                            model_ckpt_name_pattern,
                                             save_dir="",
-                                            save_name="",
+                                            model_save_name_pattern="",
                                             reshard_num=1,
                                             save_model=True):
     """
@@ -450,7 +450,7 @@ def consolidate_and_reshard_fsdp_model_dict(ckpt_dir,
     Args:
         ckpt_dir (str):
             The dir to all FSDP shard model checkpoint files.
-        ckpt_name (str):
+        model_ckpt_name_pattern (str):
             The name_pattern to all FSDP shard model checkpoint files. Files matching the
             pattern ``ckpt_dir + ckpt_name`` will be loaded. Each
             checkpoint file is assumed to be a dict with a "model" key
@@ -459,7 +459,7 @@ def consolidate_and_reshard_fsdp_model_dict(ckpt_dir,
             ``model.get_shard_metadata()``.
         save_dir (str):
             The save dir for consolidate or reshard model checkpoints.
-        save_name (str, Optional):
+        model_save_name_pattern (str, Optional):
             The name_pattern for consolidate or reshard model checkpoints.
             For reshard checkpoints name pattern: ``rank*-of-*-model.pth``
             The final save_path is save_dir + save_name.
@@ -473,13 +473,13 @@ def consolidate_and_reshard_fsdp_model_dict(ckpt_dir,
         model_state_dict: the consolidated model state dict or reshard model state dict list.
         shard_meta_list: the reshard metadatalist. For consolidated model, return None.
     """
-    checkpoints = load_checkpoints(ckpt_dir, ckpt_name)
+    checkpoints = load_checkpoints(ckpt_dir, model_ckpt_name_pattern)
     full_state_dict = consolidate_sharded_model_checkpoints(
         ckpt_dir, checkpoints)
 
     if reshard_num == 1:
         if save_model:
-            if not save_dir or not save_name:
+            if not save_dir or not model_save_name_pattern:
                 raise ValueError("save_dir and save_name should not be None!")
             actual_save_path = os.path.join(save_dir, save_name)
 
@@ -501,13 +501,14 @@ def consolidate_and_reshard_fsdp_model_dict(ckpt_dir,
         full_state_dict, checkpoints[0], layer_info[0], reshard_num)
 
     if save_model:
-        if not save_dir or not save_name:
-            raise ValueError("save_dir and save_name should not be None!")
+        if not save_dir or not model_save_name_pattern:
+            raise ValueError(
+                "save_dir and save_name_pattern should not be None!")
 
         actual_save_path = []
         for idx in range(reshard_num):
             # replace the two '*'
-            save_name_temp = save_name.replace('*', str(idx), 1)
+            save_name_temp = model_save_name_pattern.replace('*', str(idx), 1)
             save_name_temp = save_name_temp.replace('*', str(reshard_num), 1)
             actual_save_path.append(os.path.join(save_dir, save_name_temp))
 
@@ -518,9 +519,9 @@ def consolidate_and_reshard_fsdp_model_dict(ckpt_dir,
 
 
 def consolidate_and_reshard_fsdp_optim_dict(ckpt_dir,
-                                            ckpt_name,
+                                            optimizer_ckpt_name_pattern,
                                             save_dir="",
-                                            save_name="",
+                                            optimizer_save_name_pattern="",
                                             reshard_num=1,
                                             save_optimizer=True):
     """
@@ -529,7 +530,7 @@ def consolidate_and_reshard_fsdp_optim_dict(ckpt_dir,
     Args:
         ckpt_dir (str):
             The dir to all FSDP shard optimizer checkpoint files.
-        ckpt_name (str):
+        optimizer_ckpt_name_pattern (str):
             The name_pattern to all FSDP shard optimizer checkpoint files. Files matching the
             pattern ``ckpt_dir + ckpt_name`` will be loaded. Each
             checkpoint file is assumed to be a dict with a "optimizer" key
@@ -538,7 +539,7 @@ def consolidate_and_reshard_fsdp_optim_dict(ckpt_dir,
             ``model.get_shard_metadata()``.
         save_dir (str, Optional):
             The save dir for consolidate or reshard optimizer checkpoints.
-        save_name (str, Optional):
+        optimizer_save_name_pattern (str, Optional):
             The name_pattern for consolidate or reshard optimizer checkpoints.
             For reshard checkpoints name pattern:: `rank*-of-*-optimizer.pth`
             The final save_path is save_dir + save_name.
@@ -552,7 +553,7 @@ def consolidate_and_reshard_fsdp_optim_dict(ckpt_dir,
         shard_meta_list: the reshard metadatalist. For consolidated optim, return None.
     """
     # load checkpoints
-    checkpoints = load_checkpoints(ckpt_dir, ckpt_name)
+    checkpoints = load_checkpoints(ckpt_dir, optimizer_ckpt_name_pattern)
 
     # load layer_info
     file_path = os.path.join(ckpt_dir, "layer_info.pickle")
@@ -568,7 +569,7 @@ def consolidate_and_reshard_fsdp_optim_dict(ckpt_dir,
 
     if reshard_num == 1:
         if save_optimizer:
-            if not save_dir or not save_name:
+            if not save_dir or not optimizer_save_name_pattern:
                 raise ValueError("save_dir and save_name should not be None!")
             actual_save_path = os.path.join(save_dir, save_name)
 
@@ -582,13 +583,14 @@ def consolidate_and_reshard_fsdp_optim_dict(ckpt_dir,
         full_optim_state_dict, checkpoints[0], layer_info[0], reshard_num)
 
     if save_optimizer:
-        if not save_dir or not save_name:
+        if not save_dir or not optimizer_save_name_pattern:
             raise ValueError("save_dir and save_name should not be None!")
 
         actual_save_path = []
         for idx in range(reshard_num):
             # replace the two '*'
-            save_name_temp = save_name.replace('*', str(idx), 1)
+            save_name_temp = optimizer_save_name_pattern.replace(
+                '*', str(idx), 1)
             save_name_temp = save_name_temp.replace('*', str(reshard_num), 1)
             actual_save_path.append(os.path.join(save_dir, save_name_temp))
 
@@ -596,3 +598,25 @@ def consolidate_and_reshard_fsdp_optim_dict(ckpt_dir,
                          actual_save_path, 'optimizer')
 
     return optim_state_dict_list, shard_metadata_list
+
+
+def consolidate_and_reshard_fsdp_checkpoint(ckpt_dir,
+                                            model_ckpt_name_pattern,
+                                            optimizer_ckpt_name_pattern,
+                                            save_dir="",
+                                            model_save_name_pattern="",
+                                            optimizer_save_name_pattern="",
+                                            reshard_num=1,
+                                            save_checkpoint=True):
+    """
+    Consolidate the sharded FSDP model and optimizer checkpoints into a single checkpoint. Then
+    reshard the FSDP checkpoint according to the reshard_num.
+    """
+    consolidate_and_reshard_fsdp_model_dict(ckpt_dir, model_ckpt_name_pattern,
+                                            save_dir, model_save_name_pattern,
+                                            reshard_num, save_checkpoint)
+    consolidate_and_reshard_fsdp_optim_dict(ckpt_dir,
+                                            optimizer_ckpt_name_pattern,
+                                            save_dir,
+                                            optimizer_save_name_pattern,
+                                            reshard_num, save_checkpoint)
