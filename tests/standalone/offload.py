@@ -115,7 +115,6 @@ def main():
     device = dist.get_rank()
     model = Net()
     model.to(device)
-
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     scaler = torch.cuda.amp.GradScaler()
 
