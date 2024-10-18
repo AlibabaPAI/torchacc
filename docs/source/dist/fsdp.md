@@ -129,46 +129,67 @@ $ torchrun --nproc_per_node=4 gpt2_acc.py
 
 Save the model parameters and optimizer states for each FSDP shard and LR scheduler. Note that you need to save ``shard_metadata`` to restore the correct shard information.
 ```python
-import torch_xla.core.xla_model as xm
 shard_meta_data = model.model.model.get_shard_metadata()
+CKP_DIR="./ckpt_dir"
+MODEL_NAME=f"rank{ta.dist.local_rank()}-of-{ta.dist.world_size()}-model.pth"
+OPTIM_NAME=f"rank{ta.dist.local_rank()}-of-{ta.dist.world_size()}-optim.pth"
 
 # 1) Save model shards
-xm.rendezvous("saving_model")
+torchacc.dist.rendezvous("saving_model")
 model_ckpt = {
     'model': model.state_dict(),
     'shard_metadata': shard_meta_data,
 }
 
-torchacc.save(model_ckpt, CKPT_DIR + MODEL_NAME_PATTERN, master_only=False)
+torchacc.save(model_ckpt, os.path.join(CKPT_DIR, MODEL_NAME), master_only=False)
 
 # 2) Save optimizer shards
-xm.rendezvous("saving_optimizer_states")
+torchacc.dist.rendezvous("saving_optimizer_states")
 optim_ckpt = {
     'optimizer': optimizer.state_dict(),
     'shard_metadata': shard_meta_data,
 }
-torchacc.save(optim_ckpt, CKPT_DIR + OPTIM_NAME_PATTERN, master_only=False)
+torchacc.save(optim_ckpt, os.path.join(CKPT_DIR, OPTIM_NAME), master_only=False)
 
 # 3) Save lr_scheduler
 torchacc.save(lr_scheduler.state_dict(), LR_SCHEDULER_DIR)
 ```
 
-### offline consolidation
-We now support offline consolidate and reshard fsdp model and optimizer ckpts. You can run ``consolidate_and_reshard_fsdp_ckpts --help`` to refer to the instruction.
-```shell
-# consolidate model and optimizer
-consolidate_and_reshard_fsdp_ckpts --ckpt_dir CKPT_DIR --model_ckpt_name_pattern MODEL_NAME_PATTERN --optimizer_ckpt_name_pattern OPTIM_NAME_PATTERN
-# you can use --reshard_num to reshard the fsdp checkpoints
+### Load Checkpoint
+We can load from the shard ckpts and continue training if the fsdp config do not change.
+For example, we can save with fsdp_size = 4 and load with fsdp_size = 4.
+
+```python
+CKPT_DIR="./ckpt_dir"
+MODEL_NAME=f"rank{ta.dist.local_rank()}-of-{ta.dist.world_size()}-model.pth"
+OPTIM_NAME=f"rank{ta.dist.local_rank()}-of-{ta.dist.world_size()}-optim.pth"
+
+model_ckpt = torch.load(os.path.join(CKPT_DIR, MODEL_NAME))
+model.load_state_dict(model_ckpt['model'])
+
+optim_ckpt = torch.load(os.path.join(CKPT_DIR, OPTIM_NAME))
+optimizer.load_state_dict(optim_ckpt['optimizer'])
 ```
 
-### Load from Checkpoint
+### Offline Consolidation and Reshard
+We now support offline consolidate and reshard fsdp checkpoints. For example, you can save shard ckpt with fsdp_size = 4, and offline consolidate the shard checkpoints to a full checkpoint and then load the full checkpoint. What's more, you can reshard the ckpts to 8, and then load the ckpts shardly with new fsdp config: fsdp_size=8.
+
+You can run ``consolidate_and_reshard_fsdp_ckpts --help`` for more instructions.
+```shell
+# consolidate model and optimizer
+consolidate_and_reshard_fsdp_ckpts --ckpt_dir CKPT_DIR --model_ckpt_name_pattern "rank*-of-*-model.pth" --optimizer_ckpt_name_pattern "rank*-of-*-optim.pth" 
+# you can use --reshard_num to reshard the fsdp checkpoints
+consolidate_and_reshard_fsdp_ckpts --ckpt_dir CKPT_DIR --model_ckpt_name_pattern "rank*-of-*-model.pth" --optimizer_ckpt_name_pattern "rank*-of-*-optim.pth" --reshard_num 8
+```
+
+### Load from Full Checkpoint
 ```python
 # 1) Load model
-model_consolidated = torch.load("model_consolidated.pth")
+model_consolidated = torch.load("model_consolidated.pth")  # the default consolidate model name
 model.load_state_dict(model_consolidated)
 
 # 2) Load optimizer
-optimizer_consolidated = torch.load("optimizer_consolidated.pth")
+optimizer_consolidated = torch.load("optimizer_consolidated.pth")  # the defualt consolidate optimizer name
 optimizer.load_state_dict(optimizer_consolidated)
 
 # 3) Load LR scheduler
