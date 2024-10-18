@@ -13,7 +13,7 @@ from . import backend
 
 from .mesh import Mesh
 
-from .parallel_module import ParallelModule
+from .parallel_module import ParallelModule  # isort: skip
 from .dp import DataParallel
 from .fsdp import FullyShardedDataParallel
 from .spmd_fsdp import SpmdFullyShardedDataParallel
