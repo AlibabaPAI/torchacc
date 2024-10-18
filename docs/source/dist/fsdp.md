@@ -131,8 +131,8 @@ Save the model parameters and optimizer states for each FSDP shard and LR schedu
 ```python
 shard_meta_data = model.model.model.get_shard_metadata()
 CKP_DIR="./ckpt_dir"
-MODEL_NAME=f"rank{ta.dist.local_rank()}-of-{ta.dist.world_size()}-model.pth"
-OPTIM_NAME=f"rank{ta.dist.local_rank()}-of-{ta.dist.world_size()}-optim.pth"
+MODEL_NAME=f"rank{torchacc.dist.local_rank()}-of-{torchacc.dist.world_size()}-model.pth"
+OPTIM_NAME=f"rank{torchacc.dist.local_rank()}-of-{torchacc.dist.world_size()}-optim.pth"
 
 # 1) Each rank save model shard
 torchacc.dist.rendezvous("saving_model")
@@ -161,8 +161,8 @@ For example, we can save with fsdp_size = 4 and load with fsdp_size = 4.
 
 ```python
 CKPT_DIR="./ckpt_dir"
-MODEL_NAME=f"rank{ta.dist.local_rank()}-of-{ta.dist.world_size()}-model.pth"
-OPTIM_NAME=f"rank{ta.dist.local_rank()}-of-{ta.dist.world_size()}-optim.pth"
+MODEL_NAME=f"rank{torchacc.dist.local_rank()}-of-{torchacc.dist.world_size()}-model.pth"
+OPTIM_NAME=f"rank{torchacc.dist.local_rank()}-of-{torchacc.dist.world_size()}-optim.pth"
 
 model_ckpt = torch.load(os.path.join(CKPT_DIR, MODEL_NAME))
 model.load_state_dict(model_ckpt['model'])
