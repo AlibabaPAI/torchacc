@@ -134,7 +134,7 @@ CKP_DIR="./ckpt_dir"
 MODEL_NAME=f"rank{ta.dist.local_rank()}-of-{ta.dist.world_size()}-model.pth"
 OPTIM_NAME=f"rank{ta.dist.local_rank()}-of-{ta.dist.world_size()}-optim.pth"
 
-# 1) Save model shards
+# 1) Each rank save model shard
 torchacc.dist.rendezvous("saving_model")
 model_ckpt = {
     'model': model.state_dict(),
@@ -143,7 +143,7 @@ model_ckpt = {
 
 torchacc.save(model_ckpt, os.path.join(CKPT_DIR, MODEL_NAME), master_only=False)
 
-# 2) Save optimizer shards
+# 2) Each rank save optimizer shard
 torchacc.dist.rendezvous("saving_optimizer_states")
 optim_ckpt = {
     'optimizer': optimizer.state_dict(),

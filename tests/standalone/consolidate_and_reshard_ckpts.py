@@ -174,7 +174,7 @@ def main(args):
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
 
-    xm.rendezvous("saving_model")
+    ta.dist.rendezvous("saving_model")
     model_ckpt = {
         "model": model.state_dict(),
         "shard_metadata": model.model.model.get_shard_metadata(
@@ -185,7 +185,7 @@ def main(args):
         f"rank{ta.dist.local_rank()}-of-{ta.dist.world_size()}-model.pth")
     ta.save(model_ckpt, model_ckpt_path, master_only=False)
 
-    xm.rendezvous("saving_optim")
+    ta.dist.rendezvous("saving_optim")
     optim_ckpt = {
         "optimizer": optimizer.state_dict(),
         "shard_metadata": model.model.model.get_shard_metadata(),
