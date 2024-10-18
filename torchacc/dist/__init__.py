@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import torch_xla
+import torch_xla.core.xla_model as xm
 
 import torchacc as ta
 
@@ -12,7 +13,7 @@ from . import backend
 
 from .mesh import Mesh
 
-from .parallel_module import ParallelModule
+from .parallel_module import ParallelModule  # isort: skip
 from .dp import DataParallel
 from .fsdp import FullyShardedDataParallel
 from .spmd_fsdp import SpmdFullyShardedDataParallel
@@ -92,3 +93,21 @@ def init_nccl_context(config) -> None:
             ta.sync()
 
     _NCCL_CONTEXT_INITED = True
+
+
+def rendezvous(tag, payload=b'', replicas=[]):
+    """Waits for all the mesh clients to reach the named rendezvous.
+  We use the rendezvous api of xla directly.
+  
+  Args:
+    tag (string): The name of the rendezvous to join.
+    payload (bytes, optional): The payload to be sent to the rendezvous.
+    replicas (list, int): The replica ordinals taking part of the rendezvous.
+      Empty means all replicas in the mesh.
+      Default: []
+
+  Returns:
+    The payloads exchanged by all the other cores, with the payload of core
+    ordinal `i` at position `i` in the returned tuple.
+  """
+    return xm.rendezvous(payload, replicas or None, tag=tag)

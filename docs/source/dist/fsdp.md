@@ -117,7 +117,7 @@ The main changes:
 The shell command for running FSDP tasks is the same as data parallelism:
 
 ```bash
-$ torchrun --nproc_per_node=4 resnet_acc.py
+$ torchrun --nproc_per_node=4 gpt2_acc.py
 ```
 
 
@@ -127,40 +127,73 @@ $ torchrun --nproc_per_node=4 resnet_acc.py
 
 ### Save Checkpoint
 
-Save the model parameters for each FSDP shard, optimizer states, and LR scheduler. Note that you need to save `shard_metadata` to restore the correct shard information.
+Save the model parameters and optimizer states for each FSDP shard and LR scheduler. Note that you need to save ``shard_metadata`` to restore the correct shard information.
 ```python
-# 1) Save model shards
-torchacc.dist.rendezvous("saving_model")
-torchacc.dist.mark_step()
-ckpt = {
-    'model': model.state_dict(),
-    'shard_metadata': model.get_shard_metadata(),
-}
-torchacc.save(ckpt, CKPT_DIR, master_only=False)
+shard_meta_data = model.model.model.get_shard_metadata()
+CKP_DIR="./ckpt_dir"
+MODEL_NAME=f"rank{torchacc.dist.local_rank()}-of-{torchacc.dist.world_size()}-model.pth"
+OPTIM_NAME=f"rank{torchacc.dist.local_rank()}-of-{torchacc.dist.world_size()}-optim.pth"
 
-# 2) Save optimizer states and LR scheduler
+# 1) Each rank save model shard
+torchacc.dist.rendezvous("saving_model")
+model_ckpt = {
+    'model': model.state_dict(),
+    'shard_metadata': shard_meta_data,
+}
+
+torchacc.save(model_ckpt, os.path.join(CKPT_DIR, MODEL_NAME), master_only=False)
+
+# 2) Each rank save optimizer shard
 torchacc.dist.rendezvous("saving_optimizer_states")
-torchacc.save(optimizer.state_dict(), OPTIMIZER_DIR)
+optim_ckpt = {
+    'optimizer': optimizer.state_dict(),
+    'shard_metadata': shard_meta_data,
+}
+torchacc.save(optim_ckpt, os.path.join(CKPT_DIR, OPTIM_NAME), master_only=False)
+
+# 3) Save lr_scheduler
 torchacc.save(lr_scheduler.state_dict(), LR_SCHEDULER_DIR)
 ```
 
-### Load from Checkpoint
+### Load Checkpoint
+We can load from the shard ckpts and continue training if the fsdp config do not change.
+For example, we can save with fsdp_size = 4 and load with fsdp_size = 4.
 
 ```python
-# 1) Reorganize shards
-if torchacc.dist.is_master_ordinal(local=False):
-    torchacc.dist.fsdp.consolidate_sharded_model_checkpoints(
-        CKPT_DIR, ckpt_suffix)
-torchacc.dist.rendezvous("ckpt_consolidation")
+CKPT_DIR="./ckpt_dir"
+MODEL_NAME=f"rank{torchacc.dist.local_rank()}-of-{torchacc.dist.world_size()}-model.pth"
+OPTIM_NAME=f"rank{torchacc.dist.local_rank()}-of-{torchacc.dist.world_size()}-optim.pth"
 
-# 2) Load model
-ckpt_consolidated = torch.load("consolidated.pth")
-model.load_state_dict(ckpt_consolidated['model'])
+model_ckpt = torch.load(os.path.join(CKPT_DIR, MODEL_NAME))
+model.load_state_dict(model_ckpt['model'])
 
-# 3) Load optimizer states and LR scheduler
-optimizer_state = torch.load(OPTIMIZER_DIR)
+optim_ckpt = torch.load(os.path.join(CKPT_DIR, OPTIM_NAME))
+optimizer.load_state_dict(optim_ckpt['optimizer'])
+```
+
+### Offline Consolidation and Reshard
+We now support offline consolidate and reshard fsdp checkpoints. For example, you can save shard ckpt with fsdp_size = 4, and offline consolidate the shard checkpoints to a full checkpoint and then load the full checkpoint. What's more, you can reshard the ckpts to 8, and then load the ckpts shardly with new fsdp config: fsdp_size=8.
+
+You can run ``consolidate_and_reshard_fsdp_ckpts --help`` for more instructions.
+```shell
+# consolidate model and optimizer
+consolidate_and_reshard_fsdp_ckpts --ckpt_dir CKPT_DIR --model_ckpt_name_pattern "rank*-of-*-model.pth" --optimizer_ckpt_name_pattern "rank*-of-*-optim.pth" 
+# you can use --reshard_num to reshard the fsdp checkpoints
+consolidate_and_reshard_fsdp_ckpts --ckpt_dir CKPT_DIR --model_ckpt_name_pattern "rank*-of-*-model.pth" --optimizer_ckpt_name_pattern "rank*-of-*-optim.pth" --reshard_num 8
+```
+
+### Load from Full Checkpoint
+```python
+# 1) Load model
+model_consolidated = torch.load("model_consolidated.pth")  # the default consolidate model name
+model.load_state_dict(model_consolidated)
+
+# 2) Load optimizer
+optimizer_consolidated = torch.load("optimizer_consolidated.pth")  # the defualt consolidate optimizer name
+optimizer.load_state_dict(optimizer_consolidated)
+
+# 3) Load LR scheduler
 lr_scheduler_state = torch.load(LR_SCHEDULER_DIR)
-optimizer.load_state_dict(optimizer_state)
 lr_scheduler.load_state_dict(lr_scheduler_state)
 ```
 
