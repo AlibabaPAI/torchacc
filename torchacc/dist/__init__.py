@@ -5,17 +5,22 @@ import torch
 import torch.distributed as dist
 import torch_xla
 import torch_xla.core.xla_model as xm
+
 import torchacc as ta
 
 # register lazy backend
-from . import backend, fsdp, pp, tp
-from .distributed_parallel import DistributedParallel
+from . import backend
+
+from .mesh import Mesh
+
+from .parallel_module import ParallelModule
 from .dp import DataParallel
 from .fsdp import FullyShardedDataParallel
-from .mesh import Mesh
-from .parallel_module import ParallelModule
-from .pp import PipelineParallel
 from .spmd_fsdp import SpmdFullyShardedDataParallel
+from .pp import PipelineParallel
+from .distributed_parallel import DistributedParallel
+
+from . import fsdp, pp, tp
 
 BACKEND_NAME = backend._BACKEND_NAME
 EAGER_BACKEND_NAME = backend._EAGER_BACKEND_NAME
