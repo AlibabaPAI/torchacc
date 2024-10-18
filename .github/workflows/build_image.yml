@@ -3,8 +3,8 @@ name: Daily Image Building Script Execution
 on:
   workflow_dispatch:
   schedule:
-    # Runs at 1:00 AM every day
-    - cron: '0 1 * * *'
+    # Runs daily at 6:00 AM, Beijing time.
+    - cron: '0 22 * * *' # This is UTC time
 
 jobs:
   run-shell-script:
