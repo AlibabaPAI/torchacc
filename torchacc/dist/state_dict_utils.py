@@ -30,6 +30,18 @@ def unflatten_params(params, param_names, param_shapes, param_numels):
     return full_params
 
 
+def unpad(params, layer_numel, world_size):
+    if params.dim() == 0:
+        return params
+    numel = 0
+    for layer_numel in layer_numel:
+        numel += layer_numel
+    if numel % world_size != 0:
+        pad_size = world_size - numel % world_size
+        params = params[:-pad_size]
+    return params
+
+
 def get_layer_full_info(shard_metadata, model_state_dict):
     """
     Get full name, shape and numel info of unflatten and unshard model's state_dict according 
@@ -246,6 +258,9 @@ def consolidate_sharded_model_checkpoints(ckpt_dir, checkpoints):
                 state_dict[state_name] = None
 
             consolidate_params = torch.cat(p_shard_list, dim=0)
+        consolidate_params = unpad(consolidate_params, layer_numel,
+                                   shard_metadata['world_size'] *
+                                   128)  # world_size * _shard_size_multiple
 
         orig_params = unflatten_params(consolidate_params, layer_name,
                                        layer_size, layer_numel)
@@ -297,7 +312,9 @@ def consolidate_sharded_optimizer_checkpoints(ckpt_dir, checkpoints,
                     optim_state_dict['state'][idx][state_name] = None
 
                 consolidate_params = torch.cat(p_shard_list, dim=0)
-
+            consolidate_params = unpad(consolidate_params, layer_numel,
+                                       shard_metadata['world_size'] *
+                                       128)  # world_size * _shard_size_multiple
             orig_params = unflatten_params(consolidate_params, layer_name,
                                            layer_size, layer_numel)
 
@@ -312,8 +329,9 @@ def _get_shard(tensor, shard_num):
     """
     Return the shard tensor list of a full flatten tensor.
     """
-    if tensor.numel() % shard_num != 0:
-        pad_size = shard_num - tensor.numel() % shard_num
+    if tensor.numel() % (shard_num *
+                         128) != 0:  # world_size * _shard_size_multiple
+        pad_size = (shard_num * 128) - tensor.numel() % (shard_num * 128)
         tensor = F.pad(tensor, [0, pad_size])
 
     local_size = tensor.size(0) // shard_num
@@ -480,8 +498,9 @@ def consolidate_and_reshard_fsdp_model_dict(ckpt_dir,
     if reshard_num == 1:
         if save_model:
             if not save_dir or not model_save_name_pattern:
-                raise ValueError("save_dir and save_name should not be None!")
-            actual_save_path = os.path.join(save_dir, save_name)
+                raise ValueError(
+                    "save_dir and model_save_name_pattern should not be None!")
+            actual_save_path = os.path.join(save_dir, model_save_name_pattern)
 
             save_checkpoints(full_state_dict, checkpoints[0]['shard_metadata'],
                              actual_save_path, 'model')
@@ -570,8 +589,11 @@ def consolidate_and_reshard_fsdp_optim_dict(ckpt_dir,
     if reshard_num == 1:
         if save_optimizer:
             if not save_dir or not optimizer_save_name_pattern:
-                raise ValueError("save_dir and save_name should not be None!")
-            actual_save_path = os.path.join(save_dir, save_name)
+                raise ValueError(
+                    "save_dir and optimizer_save_name_pattern should not be None!"
+                )
+            actual_save_path = os.path.join(save_dir,
+                                            optimizer_save_name_pattern)
 
             save_checkpoints(full_optim_state_dict,
                              checkpoints[0]['shard_metadata'], actual_save_path,

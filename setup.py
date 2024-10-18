@@ -35,7 +35,7 @@ setup_info = dict(
     # add console_scripts
     entry_points={
         'console_scripts': [
-            'consolidate_and_reshape_ckpts = torchacc.utils.consolidate_and_reshard_ckpts:main',
+            'consolidate_and_reshard_fsdp_ckpts = torchacc.utils.consolidate_and_reshard_ckpts:main',
         ],
     },
 

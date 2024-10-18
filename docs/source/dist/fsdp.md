@@ -117,7 +117,7 @@ The main changes:
 The shell command for running FSDP tasks is the same as data parallelism:
 
 ```bash
-$ torchrun --nproc_per_node=4 resnet_acc.py
+$ torchrun --nproc_per_node=4 gpt2_acc.py
 ```
 
 
@@ -127,40 +127,52 @@ $ torchrun --nproc_per_node=4 resnet_acc.py
 
 ### Save Checkpoint
 
-Save the model parameters for each FSDP shard, optimizer states, and LR scheduler. Note that you need to save `shard_metadata` to restore the correct shard information.
+Save the model parameters and optimizer states for each FSDP shard and LR scheduler. Note that you need to save ``shard_metadata`` to restore the correct shard information.
 ```python
-# 1) Save model shards
-torchacc.dist.rendezvous("saving_model")
-torchacc.dist.mark_step()
-ckpt = {
-    'model': model.state_dict(),
-    'shard_metadata': model.get_shard_metadata(),
-}
-torchacc.save(ckpt, CKPT_DIR, master_only=False)
+import torch_xla.core.xla_model as xm
+shard_meta_data = model.model.model.get_shard_metadata()
 
-# 2) Save optimizer states and LR scheduler
-torchacc.dist.rendezvous("saving_optimizer_states")
-torchacc.save(optimizer.state_dict(), OPTIMIZER_DIR)
+# 1) Save model shards
+xm.rendezvous("saving_model")
+model_ckpt = {
+    'model': model.state_dict(),
+    'shard_metadata': shard_meta_data,
+}
+
+torchacc.save(model_ckpt, CKPT_DIR + MODEL_NAME_PATTERN, master_only=False)
+
+# 2) Save optimizer shards
+xm.rendezvous("saving_optimizer_states")
+optim_ckpt = {
+    'optimizer': optimizer.state_dict(),
+    'shard_metadata': shard_meta_data,
+}
+torchacc.save(optim_ckpt, CKPT_DIR + OPTIM_NAME_PATTERN, master_only=False)
+
+# 3) Save lr_scheduler
 torchacc.save(lr_scheduler.state_dict(), LR_SCHEDULER_DIR)
 ```
 
+### offline consolidation
+We now support offline consolidate and reshard fsdp model and optimizer ckpts. You can run ``consolidate_and_reshard_fsdp_ckpts --help`` to refer to the instruction.
+```shell
+# consolidate model and optimizer
+consolidate_and_reshard_fsdp_ckpts --ckpt_dir CKPT_DIR --model_ckpt_name_pattern MODEL_NAME_PATTERN --optimizer_ckpt_name_pattern OPTIM_NAME_PATTERN
+# you can use --reshard_num to reshard the fsdp checkpoints
+```
+
 ### Load from Checkpoint
-
 ```python
-# 1) Reorganize shards
-if torchacc.dist.is_master_ordinal(local=False):
-    torchacc.dist.fsdp.consolidate_sharded_model_checkpoints(
-        CKPT_DIR, ckpt_suffix)
-torchacc.dist.rendezvous("ckpt_consolidation")
+# 1) Load model
+model_consolidated = torch.load("model_consolidated.pth")
+model.load_state_dict(model_consolidated)
 
-# 2) Load model
-ckpt_consolidated = torch.load("consolidated.pth")
-model.load_state_dict(ckpt_consolidated['model'])
+# 2) Load optimizer
+optimizer_consolidated = torch.load("optimizer_consolidated.pth")
+optimizer.load_state_dict(optimizer_consolidated)
 
-# 3) Load optimizer states and LR scheduler
-optimizer_state = torch.load(OPTIMIZER_DIR)
+# 3) Load LR scheduler
 lr_scheduler_state = torch.load(LR_SCHEDULER_DIR)
-optimizer.load_state_dict(optimizer_state)
 lr_scheduler.load_state_dict(lr_scheduler_state)
 ```
 
