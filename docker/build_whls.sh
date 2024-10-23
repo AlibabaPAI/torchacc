@@ -34,8 +34,7 @@ function build_pytorch {
 
 function build_torch_xla {
     pushd pytorch/xla
-    # python setup.py clean
-    env ${proxy} ENABLE_DISC=1 TF_CUDA_COMPUTE_CAPABILITIES="${cuda_compute_capabilities//\ /,}" \
+    env ${proxy} TF_CUDA_COMPUTE_CAPABILITIES="${cuda_compute_capabilities//\ /,}" \
         TORCH_CUDA_ARCH_LIST="${cuda_compute_capabilities}" \
         BUILD_CPP_TESTS=0 \
         TF_NEED_CUDA=1 \
@@ -50,6 +49,9 @@ function build_torch_xla {
         python setup.py ${build_mode}
     if [ "${build_mode}" = "bdist_wheel" ]; then
         cp dist/*.whl ${work_dir}/whls/
+        # TODO: Directly installing FlashAttention 2.5.6 via `pip install` can cause an torch related undefined symbol error.
+        # Install FlashAttention in the Dockerfile.release after torchacc adapts FA to version 2.5.8.
+        wget https://odps-release.oss-cn-zhangjiakou.aliyuncs.com/torchacc/whls/flash_attn-2.5.6-cp310-cp310-linux_x86_64.whl -P ${work_dir}/whls/
     fi
     popd
 }
