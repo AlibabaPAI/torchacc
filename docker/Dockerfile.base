@@ -67,6 +67,9 @@ RUN env ${PROXY} curl -L -O "http://github.com/bazelbuild/bazel/releases/downloa
     && ./"$bazel_file" --user \
     && rm -f "$bazel_file"
 
+# install bazel 6.1.0 for BladeDISC
+RUN cd "/root/.bazel/bin" && env ${PROXY} curl -fLO https://releases.bazel.build/6.1.0/release/bazel-6.1.0-linux-x86_64 && chmod +x bazel-6.1.0-linux-x86_64
+
 ENV PATH "/root/bin:$PATH"
 ENV TERM xterm
 
