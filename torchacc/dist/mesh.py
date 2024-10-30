@@ -230,8 +230,9 @@ class Mesh:
         self.global_rank = ta.dist.rank()
         self.world_size = ta.dist.world_size()
 
-        default_topo = ['dp', 'fsdp', 'pp', 'tp', 'sp']
-        default_dims = [dp_num, fsdp_num, pp_num, tp_num, sp_num]
+        # default_topo = ['dp', 'fsdp', 'pp', 'tp', 'sp']
+        default_topo = ['dp', 'fsdp', 'pp', 'tp']
+        default_dims = [dp_num, fsdp_num, pp_num, tp_num]
         if topology is not None:
             assert isinstance(topology, list)
             dims = []
@@ -245,8 +246,8 @@ class Mesh:
                     dims.append(tp_num)
                 elif axis == 'fsdp':
                     dims.append(fsdp_num)
-                elif axis == 'sp':
-                    dims.append(sp_num)
+                # elif axis == 'sp':
+                #     dims.append(sp_num)
                 else:
                     raise ValueError(
                         f"Expect 'dp', 'pp', 'tp' 'fsdp' or 'sp' in topology, but got {axis}"

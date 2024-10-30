@@ -294,7 +294,8 @@ class DistConfig(BaseConfig):
     fsdp: FSDPConfig = field(default_factory=FSDPConfig)
     sp: SPConfig = field(default_factory=SPConfig)
     topology: List[str] = field(
-        default_factory=lambda: ['dp', 'fsdp', 'pp', 'tp', 'sp'])
+        # default_factory=lambda: ['dp', 'fsdp', 'pp', 'tp', 'sp'])
+        default_factory=lambda: ['dp', 'fsdp', 'pp', 'tp'])
 
     def validate(self):
         assert isinstance(self.dp,
@@ -387,7 +388,7 @@ class Config(BaseConfig):
             pp_num=self.dist.pp.size,
             tp_num=self.dist.tp.size,
             fsdp_num=self.dist.fsdp.size,
-            sp_num = self.dist.sp.size,
+            # sp_num = self.dist.sp.size,
             topology=self.dist.topology)
         ta.get_global_context().mesh = self._mesh
         return self._mesh
