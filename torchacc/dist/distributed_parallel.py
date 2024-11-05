@@ -14,7 +14,7 @@ class DistributedParallel(ParallelModule):
 
     def __init__(self, model: torch.nn.Module, config: Config, **kwargs):
         super().__init__(model, config, **kwargs)
-
+        self.original_model = model
         self.model = None
         if self.has_pp:
             self.model = PipelineParallel(model, self.config, **kwargs)
@@ -77,3 +77,6 @@ class DistributedParallel(ParallelModule):
                 "forward_backward is only supported for pipeline parallel.")
         assert isinstance(self.model, PipelineParallel)
         return self.model.forward_backward(*args, output_fn=output_fn, **kwargs)
+
+    def get_rope_index(self, *args, **kwargs):
+        return self.original_model.get_rope_index(*args, **kwargs)
