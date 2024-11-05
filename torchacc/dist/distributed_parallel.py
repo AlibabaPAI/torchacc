@@ -81,4 +81,5 @@ class DistributedParallel(ParallelModule):
             raise NotImplementedError(
                 "forward_backward is only supported for pipeline parallel.")
         assert isinstance(self._module, PipelineParallel)
-        return self._module.forward_backward(*args, output_fn=output_fn, **kwargs)
+        return self._module.forward_backward(
+            *args, output_fn=output_fn, **kwargs)
