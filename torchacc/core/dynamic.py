@@ -21,17 +21,22 @@ def mark_dynamic(x: torch.Tensor, dims: Union[List[int], int],
         # to work properly
         ta.get_global_context().python_dispatcher = enable_python_dispatcher()
     if isinstance(dims, int):
+        assert isinstance(bounds, int), "bounds should be of type int"
         dims = [dims]
         bounds = [bounds]
-    assert isinstance(dims, list), "dims should be of int or list type"
-    assert isinstance(bounds, list), "bounds should be of int or list type"
+    assert isinstance(dims, list), "dims should be of type int or list of int"
+    assert isinstance(bounds,
+                      list), "bounds should be of type int or list of int"
     for i, dim in enumerate(dims):
+        assert isinstance(dim, int), "dims should be of type int or list of int"
         if dim < (-x.dim()) or dim >= x.dim():
             raise ValueError(f"Dimension out of range (expected to be in range" \
                              f" of [{-x.dim()}, {x.dim()-1}], but got {dim})")
         if dim < 0:
             dims[i] = x.dim() + dim
     for dim, bound in zip(dims, bounds):
+        assert isinstance(bound,
+                          int), "bounds should be of type int or list of int"
         if bound < x.size(dim):
             raise ValueError(f"The upper bound of the shape size {bound} is less" \
                              f" than the current size {x.size(dim)}")
