@@ -67,3 +67,9 @@ class ParallelModule(torch.nn.Module, ABC):
         """
         raise NotImplementedError(
             "forward_backward is only supported for pipeline parallel.")
+
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self._get_underlay_model(), name)

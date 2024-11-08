@@ -44,12 +44,6 @@ class DistributedParallel(ParallelModule):
         if self._module is None:
             self._module = module
 
-    def __getattr__(self, name):
-        try:
-            return super().__getattr__(name)
-        except AttributeError:
-            return self._get_underlay_model().__getattr__(name)
-
     def _get_underlay_model(self):
         if isinstance(self._module, ParallelModule):
             return self._module._get_underlay_model()
