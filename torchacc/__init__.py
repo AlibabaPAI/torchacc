@@ -9,6 +9,7 @@ from .core import (AsyncLoader, amp, fetch_gradients, is_lazy_device,
                    is_lazy_tensor, lazy_device, mark_step, save,
                    send_cpu_data_to_device, sync)
 from .core.accelerate_hf_trainer import accelerate_hf_trainer
+from .core.dynamic import mark_dynamic
 from .llm.qwen_patch import patch_qwen_model
 from .utils import decompose, patch
 from .version import __version__
@@ -23,6 +24,7 @@ _global_context = None
 class GlobalContext:
     config: Config = field(default_factory=Config)
     mesh: dist.Mesh = field(default_factory=dist.Mesh)
+    python_dispatcher = None
 
 
 def get_global_context():
@@ -55,6 +57,12 @@ def _set_env():
     # TODO: The method of alias still has some issues need to fix.
     #if 'XLA_USING_BUFFER_DONOR' not in os.environ:
     #    os.environ['XLA_USING_BUFFER_DONOR'] = '0'
+
+    # Use the value of the upper bound for shape comparison.
+    # TODO: This is experimental. It is necessary to remove this environment variable
+    # to support users to directly perform `if tensor.shape[0] > 10`.
+    os.environ['USE_BOUND_FOR_SHAPE_COMPARE'] = os.getenv(
+        'USE_BOUND_FOR_SHAPE_COMPARE', '1')
 
     if 'CUDA_DEVICE_MAX_CONNECTIONS' not in os.environ:
         os.environ['CUDA_DEVICE_MAX_CONNECTIONS'] = '1'
