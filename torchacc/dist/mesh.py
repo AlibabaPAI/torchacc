@@ -420,3 +420,8 @@ class Mesh:
     def get_fsdp_rank_groups(self):
         """ A list of list, the groups of ranks within the same fsdp. """
         return self.fsdp_groups
+
+    # SP
+    def get_sp_num(self):
+        """ The number of sp. """
+        return self.sp_num
