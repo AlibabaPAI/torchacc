@@ -92,3 +92,30 @@ def patch_llama(use_flash_attn):
             return None
 
         LlamaModel._update_causal_mask = update_causal_mask
+
+def patch_qwen():
+    '''
+    Replace search_str with replace_str in `Qwen2FlashAttention2.forward` to avoid xla graph be executed
+    '''
+    import inspect
+    import transformers.models.qwen2.modeling_qwen2 as qwen2
+    # max function will trigger tensor evaluation casuing graph be excuted
+    replace_str = "        rotary_seq_len = kv_seq_len"
+    search_str = "position_ids[:, -1].max().item()"
+    src = inspect.getsource(qwen2.Qwen2FlashAttention2).splitlines()
+    for i, line in enumerate(src):
+        if search_str in line:
+            # print(f"target str find {search_str} at {i}:{line}")
+            src[i] = replace_str
+            break    
+    src = '\n'.join(src)
+    dict_src = \
+"""
+QWEN2_ATTENTION_CLASSES = {
+    "eager": Qwen2Attention,
+    "flash_attention_2": Qwen2FlashAttention2,
+    "sdpa": Qwen2SdpaAttention,
+}
+"""
+    src = src + dict_src
+    exec(src, qwen2.__dict__)
