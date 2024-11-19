@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from torch.utils._pytree import tree_map_only
 import torch_xla.core.xla_model as xm
 
+
 def _numel(shape):
     numel = 1
     for d in shape:
@@ -149,6 +150,7 @@ def get_layer_full_info(shard_metadata, model_state_dict):
 
     return (layer_name_list, layer_size_list, layer_numel_list, sharded_list)
 
+
 def all_gather_state(state_params, sharding_groups, all_gather_op):
     if state_params.dim() == 0:
         return state_params
@@ -156,6 +158,7 @@ def all_gather_state(state_params, sharding_groups, all_gather_op):
     tensor_buffer = all_gather_op(state_params, groups=sharding_groups)
 
     return tensor_buffer
+
 
 class _PosDimTensorInfo(NamedTuple):
     """
@@ -168,15 +171,18 @@ class _PosDimTensorInfo(NamedTuple):
 
     shape: torch.Size
     dtype: torch.dtype
-    
+
+
 def _setup_gloo_distributed(group):
     if not torch.distributed.is_initialized():
         dist.init_process_group()
     pg = dist.new_group(ranks=group, backend="gloo")
     return pg
 
+
 def _cleanup_gloo_distributed(pg):
     dist.destroy_process_group(pg)
+
 
 def broadcast_processed_state(optim_state: dict[str, Any], rank,
                               sharding_groups):
@@ -212,6 +218,7 @@ def broadcast_processed_state(optim_state: dict[str, Any], rank,
         return optim_state
     else:
         return objects[0]
+
 
 def broadcast_state(state_params, device, rank, sharding_groups,
                     collective_broadcast_op):

@@ -18,6 +18,7 @@ import torchacc.utils.trace as trace
 import torchacc.utils.utils as utils
 import torchacc.dist.state_dict_utils as state_dict_utils
 
+
 def split_fsdp_wrap_modules(
         graph_model: fx.GraphModule,
         layer_cls: Set[str],
@@ -231,7 +232,7 @@ class FullyShardedDataParallel(ParallelModule):
 
     def forward(self, *args, **kwargs):
         return self.model(*args, **kwargs)
-    
+
     @staticmethod
     def sharded_optim_state_dict(
         model: torch.nn.Module,

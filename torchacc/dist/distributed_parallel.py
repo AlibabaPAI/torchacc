@@ -4,6 +4,7 @@ from torchacc.config import Config
 from torchacc.dist import ParallelModule, DataParallel, FullyShardedDataParallel, PipelineParallel, SpmdFullyShardedDataParallel
 from typing import Any, Dict
 
+
 class DistributedParallel(ParallelModule):
     """Enable different distributed parallel for the model.
 
