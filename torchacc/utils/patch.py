@@ -124,6 +124,6 @@ def patch_qwen():
     }
             """
             src = src + dict_src
-            exec(src, qwen2.__dict__)
+            exec(src, qwen2.__dict__) 
         except Exception as e:
             logger.warning(f"patch qwen2 failed due to: {e}")
