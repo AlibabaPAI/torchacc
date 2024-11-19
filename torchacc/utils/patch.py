@@ -94,6 +94,7 @@ def patch_llama(use_flash_attn):
 
         LlamaModel._update_causal_mask = update_causal_mask
 
+
 def patch_qwen():
     '''
     Modify the calculation of `rotary_seq_len` in `Qwen2FlashAttention2.forward` to avoid xla graph be executed
@@ -106,7 +107,7 @@ def patch_qwen():
         try:
             import transformers.models.qwen2.modeling_qwen2 as qwen2
             import re
-            
+
             src = inspect.getsource(qwen2.Qwen2FlashAttention2)
 
             pattern1 = r"rotary_seq_len\s*=\s*\(\s*max\(kv_seq_len,\s*position_ids\[:,\s*-1\]\.max\(\)\.item\(\)\s*\+\s*1\)\s*if\s*position_ids\s*is\s*not\s*None\s*else\s*kv_seq_len\s*\)"
@@ -124,6 +125,6 @@ def patch_qwen():
     }
             """
             src = src + dict_src
-            exec(src, qwen2.__dict__) 
+            exec(src, qwen2.__dict__)
         except Exception as e:
             logger.warning(f"patch qwen2 failed due to: {e}")
