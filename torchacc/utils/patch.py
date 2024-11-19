@@ -59,6 +59,7 @@ def patch_fa():
     `torchacc.ops.flash_attn_xla` and `torchacc.ops.flash_attn_varlen_xla`,
     and dynamically determine which one to use at runtime based on the input device.
     '''
+    from .logger import logger
     try:
         import flash_attn
         if hasattr(flash_attn.flash_attn_func, '__orig'):
@@ -68,7 +69,7 @@ def patch_fa():
         flash_attn.flash_attn_varlen_func = _choose_functions(
             flash_attn.flash_attn_varlen_func, ops.flash_attn_varlen_xla)
     except ImportError:
-        logger.warn(f"Patch flash_attn failed.")
+        logger.warning(f"Patch flash_attn failed.")
 
 
 def patch_llama(use_flash_attn):
@@ -92,3 +93,38 @@ def patch_llama(use_flash_attn):
             return None
 
         LlamaModel._update_causal_mask = update_causal_mask
+
+def patch_qwen():
+    '''
+    Replace search_str with replace_str in `Qwen2FlashAttention2.forward` to avoid xla graph be executed
+    '''
+    import inspect
+    import transformers
+    from .logger import logger
+    from packaging import version
+    if version.parse(transformers.__version__) >= version.parse("4.37.0"):
+        try:
+            import transformers.models.qwen2.modeling_qwen2 as qwen2
+            import re
+            
+            src = inspect.getsource(qwen2.Qwen2FlashAttention2)
+
+            pattern1 = r"rotary_seq_len\s*=\s*\(\s*max\(kv_seq_len,\s*position_ids\[:,\s*-1\]\.max\(\)\.item\(\)\s*\+\s*1\)\s*if\s*position_ids\s*is\s*not\s*None\s*else\s*kv_seq_len\s*\)"
+            pattern2 = r"rotary_seq_len\s*=\s*max\(kv_seq_len,\s*position_ids\[:,\s*-1\]\.max\(\)\.item\(\)\)\s*\+\s*1"
+            replacement = "rotary_seq_len = kv_seq_len"
+
+            src = re.sub(pattern1, replacement, src)
+            src = re.sub(pattern2, replacement, src)
+            dict_src = \
+            """
+    QWEN2_ATTENTION_CLASSES = {
+        "eager": Qwen2Attention,
+        "flash_attention_2": Qwen2FlashAttention2,
+        "sdpa": Qwen2SdpaAttention,
+    }
+            """
+            src = src + dict_src
+            exec(src, qwen2.__dict__)
+        except Exception as e:
+            print(e)
+            logger.warning(f"patch qwen2 failed")
