@@ -5,11 +5,13 @@ import threading
 import re
 from collections import OrderedDict
 from glob import glob
-from typing import Dict
+from typing import Dict, Any, NamedTuple, Optional
 
 import torch
+import torch.distributed as dist
 import torch.nn.functional as F
-
+from torch.utils._pytree import tree_map_only
+import torch_xla.core.xla_model as xm
 
 def _numel(shape):
     numel = 1
@@ -146,6 +148,88 @@ def get_layer_full_info(shard_metadata, model_state_dict):
     layer_numel_list = [[n] for n in layer_numel_list]
 
     return (layer_name_list, layer_size_list, layer_numel_list, sharded_list)
+
+def all_gather_state(state_params, sharding_groups, all_gather_op):
+    if state_params.dim() == 0:
+        return state_params
+
+    tensor_buffer = all_gather_op(state_params, groups=sharding_groups)
+
+    return tensor_buffer
+
+class _PosDimTensorInfo(NamedTuple):
+    """
+    Attributes:
+        shape (torch.Size): Sharded tensor shape (which is equal to the
+            unsharded tensor shape if the tensor is optimizer state for a
+            non-FSDP parameter and is hence not sharded).
+        dtype (torch.dtype): Data type of the tensor.
+    """
+
+    shape: torch.Size
+    dtype: torch.dtype
+    
+def _setup_gloo_distributed(group):
+    if not torch.distributed.is_initialized():
+        dist.init_process_group()
+    pg = dist.new_group(ranks=group, backend="gloo")
+    return pg
+
+def _cleanup_gloo_distributed(pg):
+    dist.destroy_process_group(pg)
+
+def broadcast_processed_state(optim_state: dict[str, Any], rank,
+                              sharding_groups):
+    objects: list[Any] = [None]
+    if rank == 0:
+        objects[0] = tree_map_only(
+            torch.Tensor,
+            lambda v: v.cpu() if v.dim() == 0 else _PosDimTensorInfo(
+                v.shape, v.dtype),  # type: ignore[union-attr]
+            optim_state,
+        )
+
+    ordinal = xm.get_ordinal()
+    world_size = xm.xrt_world_size()
+    # global group
+    new_group = list(range(int(world_size)))
+
+    # sharding_groups may be None if we use xla fsdp directly
+    if sharding_groups is not None:
+        # broadcast within each sharding_group
+        for group in sharding_groups:
+            if ordinal in group:
+                new_group = group
+                break
+
+    pg_group = _setup_gloo_distributed(new_group)
+    # the src is the global rank of each sharding group's rank0
+    dist.broadcast_object_list(
+        objects, src=dist.get_global_rank(pg_group, 0), group=pg_group)
+    _cleanup_gloo_distributed(pg_group)
+
+    if rank == 0:
+        return optim_state
+    else:
+        return objects[0]
+
+def broadcast_state(state_params, device, rank, sharding_groups,
+                    collective_broadcast_op):
+    if rank == 0 and isinstance(state_params, torch.Tensor):
+        tensor_buffer = state_params.to(device)
+    else:
+        tensor_buffer = torch.zeros(
+            state_params.shape, dtype=state_params.dtype, device=device)
+
+    # Since broadcast employs all-reduce, here we only need to ensure that root_ordinal
+    # is different from xm.get_ordinal() on the non-root nodes
+    root_ordinal = xm.get_ordinal() if rank == 0 else -1
+
+    collective_broadcast_op([tensor_buffer],
+                            root_ordinal=root_ordinal,
+                            groups=sharding_groups)
+
+    return tensor_buffer
 
 
 def load_checkpoints(ckpt_dir, ckpt_name):
