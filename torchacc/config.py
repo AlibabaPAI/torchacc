@@ -6,9 +6,9 @@ from typing import Dict, List, Optional, Set, Union
 
 import torch
 import torch.distributed as dist
-import torchacc.ops.context_parallel as context_parallel
 
 import torchacc as ta
+import torchacc.ops.context_parallel as context_parallel
 
 if sys.version_info >= (3, 10):
     dataclass = functools.partial(dataclass, slots=True)
@@ -262,15 +262,14 @@ class FSDPConfig(BaseConfig):
                 cls,
                 str), "cls in FSDPConfig.wrap_layer_cls should be of str type"
 
+
 class SPConfig(BaseConfig):
     """Configuration for 
     """
     size: int = 1
-    
 
     def validate(self):
-        assert isinstance(self.size,
-                          int), "SPConfig.size should be of int type"
+        assert isinstance(self.size, int), "SPConfig.size should be of int type"
 
 
 @dataclass
@@ -306,9 +305,8 @@ class DistConfig(BaseConfig):
         assert isinstance(
             self.fsdp,
             FSDPConfig), "DistConfig.fsdp should be of FSDPConfig type"
-        assert isinstance(
-            self.sp,
-            SPConfig), "DistConfig.sp should be of SPConfig type"
+        assert isinstance(self.sp,
+                          SPConfig), "DistConfig.sp should be of SPConfig type"
         assert isinstance(self.topology,
                           list), "DistConfig.topology should be of list type"
 
