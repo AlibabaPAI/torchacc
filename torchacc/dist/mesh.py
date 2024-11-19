@@ -226,7 +226,13 @@ class Mesh:
     corresponding to each of the parallel strategies.
     """
 
-    def __init__(self, dp_num=1, pp_num=1, tp_num=1, fsdp_num=1, sp_num=1, topology=None):
+    def __init__(self,
+                 dp_num=1,
+                 pp_num=1,
+                 tp_num=1,
+                 fsdp_num=1,
+                 sp_num=1,
+                 topology=None):
         self.global_rank = ta.dist.rank()
         self.world_size = ta.dist.world_size()
 
@@ -264,7 +270,6 @@ class Mesh:
         self.tp_num = tp_num
         self.fsdp_num = fsdp_num
         self.sp_num = sp_num
-        
 
         # Create new ProcessGroup for data collectives - these are the data parallel groups
         self.dp_group = None
@@ -313,7 +318,7 @@ class Mesh:
                 if self.global_rank in ranks:
                     self.fsdp_group = ranks
                     self.fsdp_proc_group = proc_group
-                    
+
         # Create new ProcessGroups for sp collectives - these are sequence parallel groups
         self.sp_group = None
         self.sp_proc_group = None
