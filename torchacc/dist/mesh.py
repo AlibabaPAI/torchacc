@@ -226,7 +226,7 @@ class Mesh:
     corresponding to each of the parallel strategies.
     """
 
-    def __init__(self, dp_num=1, pp_num=1, tp_num=1, fsdp_num=1, topology=None):
+    def __init__(self, dp_num=1, pp_num=1, tp_num=1, fsdp_num=1, sp_num=1, topology=None):
         self.global_rank = ta.dist.rank()
         self.world_size = ta.dist.world_size()
 
@@ -245,9 +245,11 @@ class Mesh:
                     dims.append(tp_num)
                 elif axis == 'fsdp':
                     dims.append(fsdp_num)
+                # elif axis == 'sp':
+                #     dims.append(sp_num)
                 else:
                     raise ValueError(
-                        f"Expect 'dp', 'pp', 'tp' or 'fsdp' in topology, but got {axis}"
+                        f"Expect 'dp', 'pp', 'tp' 'fsdp' or 'sp' in topology, but got {axis}"
                     )
             for p in default_topo:
                 if p not in topology:
@@ -261,6 +263,8 @@ class Mesh:
         self.pp_num = pp_num
         self.tp_num = tp_num
         self.fsdp_num = fsdp_num
+        self.sp_num = sp_num
+        
 
         # Create new ProcessGroup for data collectives - these are the data parallel groups
         self.dp_group = None
@@ -309,6 +313,18 @@ class Mesh:
                 if self.global_rank in ranks:
                     self.fsdp_group = ranks
                     self.fsdp_proc_group = proc_group
+                    
+        # Create new ProcessGroups for sp collectives - these are sequence parallel groups
+        self.sp_group = None
+        self.sp_proc_group = None
+        self.sp_groups = self._topo.get_axis_comm_lists('sp')
+        if self.sp_num > 1:
+            self._check_mesh_valid()
+            for ranks in self.sp_groups:
+                proc_group = dist.new_group(ranks=ranks)
+                if self.global_rank in ranks:
+                    self.sp_group = ranks
+                    self.sp_proc_group = proc_group
 
     def _check_mesh_valid(self):
         ranks = 1
@@ -403,3 +419,8 @@ class Mesh:
     def get_fsdp_rank_groups(self):
         """ A list of list, the groups of ranks within the same fsdp. """
         return self.fsdp_groups
+
+    # SP
+    def get_sp_num(self):
+        """ The number of sp. """
+        return self.sp_num
