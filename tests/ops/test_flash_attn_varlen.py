@@ -222,7 +222,7 @@ def test_flash_attn_varlen(seqlen, d, dtype, mha_type, causal):
     model = FlashAttention(d * nheads, nheads, nheads_k).to(device)
     model.train()
     with torch.cuda.amp.autocast(dtype=dtype):
-        ret = model(q, k, v, attention_mask=attention_mask)
+        ret = model(q, k, v, attention_mask=attention_mask, causal=causal)
 
     (
         dq,
@@ -253,7 +253,11 @@ def test_flash_attn_varlen(seqlen, d, dtype, mha_type, causal):
 
     with torch.cuda.amp.autocast(dtype=dtype):
         ret_xla = model_xla(
-            q_xla, k_xla, v_xla, attention_mask=attention_mask_xla)
+            q_xla,
+            k_xla,
+            v_xla,
+            attention_mask=attention_mask_xla,
+            causal=causal)
 
     (
         dq_xla,
@@ -265,8 +269,8 @@ def test_flash_attn_varlen(seqlen, d, dtype, mha_type, causal):
     assert torch.allclose(
         ret_xla.cpu().detach(),
         ret.cpu().detach(),
-        rtol=1e-1,
-        atol=1e-1,
+        rtol=1e-2,
+        atol=1e-2,
         equal_nan=True)
     assert torch.allclose(
         dq_xla.cpu().detach(),

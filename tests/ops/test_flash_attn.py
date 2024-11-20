@@ -59,8 +59,8 @@ def setup_env():
     ],
 )
 @pytest.mark.parametrize("dropout_p", [0.0, 0.17])
-def test_flash_attn_output(seqlen_q, seqlen_k, d, dropout_p, causal,
-                                  local, alibi, deterministic, mha_type, dtype):
+def test_flash_attn_output(seqlen_q, seqlen_k, d, dropout_p, causal, local,
+                           alibi, deterministic, mha_type, dtype):
     # TODO(to wenting.swt): maybe we need support this
     if d % 8 != 0:
         pytest.skip(reason="Expected head_size_og % 8 == 0 to be true")

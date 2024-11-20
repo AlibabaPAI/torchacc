@@ -61,8 +61,9 @@ def patch_fa():
     '''
     try:
         import transformers
-        version = transformers.__version__
-        if version >= "4.44.2":
+        from packaging import version
+        version_ts = transformers.__version__
+        if version.parse(version_ts) >= version.parse("4.42.0"):
             import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
             from typing import Optional
 
@@ -100,7 +101,7 @@ def patch_fa():
             modeling_flash_attention_utils._flash_attention_forward = _flash_attention_forward
         else:
             logger.warn(
-                f'FlashAttention is not successfully patched with transformers version={version},'
+                f'FlashAttention is not successfully patched with transformers version={version_ts},'
                 ' try to patch flash_attn.flash_attn_func')
             try:
                 import flash_attn
