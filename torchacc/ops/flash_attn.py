@@ -382,7 +382,7 @@ def flash_attn_varlen_xla(
     assert q.dtype in [torch.bfloat16,
                        torch.float16], 'flash attention only supports fp16/bf16'
     if attention_mask.dtype != torch.int32:
-        attention_mask.to(torch.in32)
+        attention_mask = attention_mask.to(torch.int32)
     return FlashAttnVarlenXla.apply(
         q,
         k,

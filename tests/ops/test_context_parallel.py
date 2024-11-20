@@ -8,8 +8,8 @@ import torch.distributed as dist
 import torch_xla.core.xla_model as xm
 import torchacc as ta
 import torchacc.ops.context_parallel as context_parallel
-from flash_attn import flash_attn_varlen_func
-from torchacc.ops import flash_attn_varlen_xla
+from flash_attn import flash_attn_func
+from torchacc.ops import flash_attn_xla
 
 from utils.distributed import (MultiProcessTestBase,
                                instantiate_parametrized_tests, parametrize,
@@ -135,38 +135,25 @@ class ContextParallelTest(MultiProcessTestBase):
                                        dims).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
         q, k, v = [x.transpose(1, 2) for x in [q, k, v]]
-        q, k, v = [
-            einops.rearrange(x, "b s ... -> (b s) ...") for x in [q, k, v]
-        ]
-        cu_q_lens = torch.arange(
-            0, (B + 1) * N, step=N, dtype=torch.int32, device=q.device)
+
         if ta.is_lazy_tensor(q):
-            output_fa = flash_attn_varlen_xla(
+            output_fa = flash_attn_xla(
                 q,
                 k,
                 v,
-                cu_q_lens,
-                cu_q_lens,
-                N,
-                N,
                 dropout_p=0.0,
                 softmax_scale=None,
                 causal=False,
                 return_attn_probs=False)
         else:
-            output_fa = flash_attn_varlen_func(
+            output_fa = flash_attn_func(
                 q,
                 k,
                 v,
-                cu_q_lens,
-                cu_q_lens,
-                N,
-                N,
                 dropout_p=0.0,
                 softmax_scale=None,
                 causal=False,
                 return_attn_probs=False)
-        output_fa = einops.rearrange(output_fa, "(b s) ... -> b s ...", b=B)
 
         loss_fa = torch.sum(output_fa)
         loss_fa.backward()
