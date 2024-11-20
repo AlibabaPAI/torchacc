@@ -18,6 +18,10 @@ import torchacc.utils.trace as trace
 import torchacc.utils.utils as utils
 import torchacc.dist.state_dict_utils as state_dict_utils
 
+from torch.distributed.fsdp import FullyShardedDataParallel as torch_FSDP
+from torch.distributed.fsdp import StateDictType
+from torch.distributed.fsdp import FullStateDictConfig
+from torch.distributed.fsdp import FullOptimStateDictConfig
 
 def split_fsdp_wrap_modules(
         graph_model: fx.GraphModule,
@@ -237,6 +241,7 @@ class FullyShardedDataParallel(ParallelModule):
     def sharded_optim_state_dict(
         model: torch.nn.Module,
         optim: torch.optim.Optimizer,
+        **kwargs
     ):
         """
         Return the optimizer state-dict in its sharded form.
@@ -251,15 +256,23 @@ class FullyShardedDataParallel(ParallelModule):
             Dict[str, Any]: A :class:`dict` containing the optimizer state for
             fsdp model. Each rank get the sharded optim state added with shard_metadata.
         """
+        # get the inner fsdp model
+        while hasattr(model, 'model'):
+            model = model.model
+        
         if not isinstance(
-                model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(
-                    model, FullyShardedDataParallel):
+                model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(model, torch_fsdp.FullyShardedDataParallel):
             raise NotImplementedError(
-                "The model must be torchacc or xla FSDP model")
+                "The model must be xla or torch FSDP model")
         assert isinstance(model,
-                          xla_fsdp.XlaFullyShardedDataParallel) or isinstance(
-                              model, FullyShardedDataParallel)
+                          xla_fsdp.XlaFullyShardedDataParallel) or isinstance(model, torch_fsdp.FullyShardedDataParallel)
 
+        # eager backend
+        if isinstance(model, torch_fsdp.FullyShardedDataParallel):
+            return optim.state_dict()
+            #group = kwargs.get('group', None)
+            #return torch_fsdp.FullyShardedDataParallel.sharded_optim_state_dict(model, optim, group=group)
+        
         if isinstance(model, FullyShardedDataParallel):
             model = model.model
 
@@ -273,8 +286,7 @@ class FullyShardedDataParallel(ParallelModule):
     @staticmethod
     def full_optim_state_dict(model: torch.nn.Module,
                               optim: torch.optim.Optimizer,
-                              rank0_only: bool = True,
-                              cpu_offload: bool = True) -> Dict[str, Any]:
+                              **kwargs) -> Dict[str, Any]:
         """Return the full optimizer state-dict.
 
         Consolidates the full optimizer state on rank 0 and returns it
@@ -293,11 +305,18 @@ class FullyShardedDataParallel(ParallelModule):
             passed into the optimizer ``optim``.
             optim (torch.optim.Optimizer): Optimizer for model 's
                 parameters.
-            rank0_only (bool): If ``True``, return the populated :class:`dict`
-                only on rank 0; if ``False``, return it on all ranks. (Default:
+            
+            kwargs:
+                The args below are specified for torchacc fsdp:
+                rank0_only (bool): If ``True``, return the populated :class:`dict`
+                    only on rank 0; if ``False``, return it on all ranks. (Default:
+                    ``True``).
+                cpu_offload(bool): If ``True``, offload the state-dict to cpu. (Default:
                 ``True``)
-            cpu_offload(bool): If ``True``, offload the state-dict to cpu. (Default:
-            ``True``)
+                
+                The args below are specified for torch fsdp:
+                
+        
 
         Returns:
             Dict[str, Any]: A :class:`dict` containing the optimizer state for
@@ -306,18 +325,33 @@ class FullyShardedDataParallel(ParallelModule):
             :meth:`torch.optim.Optimizer.state_dict`. If ``rank0_only=True``,
             then nonzero ranks return an :class:`dict` with keys but empty value.
         """
-        if not isinstance(
-                model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(
-                    model, FullyShardedDataParallel):
-            raise NotImplementedError(
-                "The model must be torchacc or xla FSDP model")
-        assert isinstance(model,
-                          xla_fsdp.XlaFullyShardedDataParallel) or isinstance(
-                              model, FullyShardedDataParallel)
-
-        if isinstance(model, FullyShardedDataParallel):
+        # get the inner fsdp model
+        while hasattr(model, 'model'):
             model = model.model
+        
+        if not isinstance(
+                model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(model, torch_fsdp.FullyShardedDataParallel):
+            raise NotImplementedError(
+                "The model must be xla or torch FSDP model")
+        assert isinstance(model,
+                          xla_fsdp.XlaFullyShardedDataParallel) or isinstance(model, torch_fsdp.FullyShardedDataParallel)
 
+        rank0_only = kwargs.get('rank0_only', True)
+        cpu_offload = kwargs.get('cpu_offload', True)
+        # eager backend
+        if isinstance(model, torch_fsdp.FullyShardedDataParallel):
+            optim_input = kwargs.get('optim_input', None)
+            group = kwargs.get('group', None)
+            
+            torch_FSDP.set_state_dict_type(
+               model,
+               StateDictType.FULL_STATE_DICT,
+               FullStateDictConfig(rank0_only=rank0_only, offload_to_cpu=cpu_offload),
+               FullOptimStateDictConfig(rank0_only=rank0_only, offload_to_cpu=cpu_offload),
+            )
+            
+            return torch_FSDP.optim_state_dict(model, optim)
+            #return torch_fsdp.FullyShardedDataParallel.full_optim_state_dict(model, optim, optim_input=optim_input, rank0_only=rank0_only, group=group)
         shard_meta_data = model.get_shard_metadata()
         sharded_optim_state = optim.state_dict()['state']
         optim_state_param_groups = optim.state_dict()['param_groups']
@@ -372,9 +406,10 @@ class FullyShardedDataParallel(ParallelModule):
         return consolidate_optim_state_dict
 
     @staticmethod
-    def load_optim_state_dict(model: torch.nn.Module,
-                              optim_state_dict: Dict[str, Any],
-                              rank0_only: bool = True) -> Dict[str, Any]:
+    def optim_state_dict_to_load(model: torch.nn.Module,
+                                 optim: torch.optim.Optimizer,
+                                 optim_state_dict: Dict[str, Any],
+                                 **kwargs) -> Dict[str, Any]:
         """
         Convert an optimizer state-dict so that it can be loaded into the
         optimizer associated with the FSDP model.
@@ -393,20 +428,39 @@ class FullyShardedDataParallel(ParallelModule):
             Dict[str, Any]: A :class:`dict` containing the optimizer state for
             model which is sharded.
         """
+        # get the inner fsdp model
+        while hasattr(model, 'model'):
+            model = model.model
+        
         if not isinstance(
-                model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(
-                    model, FullyShardedDataParallel):
+                model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(model, torch_fsdp.FullyShardedDataParallel):
             raise NotImplementedError(
-                "The model must be torchacc or xla FSDP model")
+                "The model must be xla or torch FSDP model")
         assert isinstance(model,
-                          xla_fsdp.XlaFullyShardedDataParallel) or isinstance(
-                              model, FullyShardedDataParallel)
+                          xla_fsdp.XlaFullyShardedDataParallel) or isinstance(model, torch_fsdp.FullyShardedDataParallel)
 
+        rank0_only = kwargs.get('rank0_only', True)
+        # eager backend
+        if isinstance(model, torch_fsdp.FullyShardedDataParallel):
+            is_named_optimizer = kwargs.get('is_named_optimizer', False)
+            load_directly = kwargs.get('load_directly', False)
+            group = kwargs.get('group', None)
+            
+            # only support for full load.
+            torch_FSDP.set_state_dict_type(
+                model,
+                StateDictType.FULL_STATE_DICT,
+                FullStateDictConfig(rank0_only=rank0_only),
+                FullOptimStateDictConfig(rank0_only=rank0_only),
+            )
+            return torch_FSDP.optim_state_dict_to_load(model, optim, optim_state_dict)
+            
+            #return torch_fsdp.FullyShardedDataParallel.optim_state_dict_to_load(model, optim, optim_state_dict, is_named_optimizer=is_named_optimizer, load_directly=load_directly, group=group)
+            
         if isinstance(model, FullyShardedDataParallel):
             model = model.model
 
         shard_meta_data = model.get_shard_metadata()
-
         if optim_state_dict is None:
             if not rank0_only or model.rank == 0:
                 raise ValueError('optim_state_dict cannot be None')
