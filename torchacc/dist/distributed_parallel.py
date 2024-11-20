@@ -1,8 +1,11 @@
+from typing import Any, Dict
+
 import torch
 
 from torchacc.config import Config
-from torchacc.dist import ParallelModule, DataParallel, FullyShardedDataParallel, PipelineParallel, SpmdFullyShardedDataParallel
-from typing import Any, Dict
+from torchacc.dist import (DataParallel, FullyShardedDataParallel,
+                           ParallelModule, PipelineParallel,
+                           SpmdFullyShardedDataParallel)
 
 
 class DistributedParallel(ParallelModule):
@@ -87,23 +90,20 @@ class DistributedParallel(ParallelModule):
 
         return self.model.sharded_optim_state_dict(self.model, optim)
 
-    def full_optim_state_dict(self,
-                              optim: torch.optim.Optimizer,
-                              **kwargs):
+    def full_optim_state_dict(self, optim: torch.optim.Optimizer, **kwargs):
         if not self.has_fsdp or self.spmd_fsdp:
             raise NotImplementedError(
                 "full_optim_state_dict is only support for FullyShardedDataParallel"
             )
 
-        return self.model.full_optim_state_dict(self.model, optim, kwargs)
+        return self.model.full_optim_state_dict(self.model, optim, **kwargs)
 
-    def optim_state_dict_to_load(self,
-                                 optim,
-                                 optim_state_dict: Dict[str, Any],
+    def optim_state_dict_to_load(self, optim, optim_state_dict: Dict[str, Any],
                                  **kwargs):
         if not self.has_fsdp or self.spmd_fsdp:
             raise NotImplementedError(
                 "optim_state_dict_to_load is only support for FullyShardedDataParallel"
             )
 
-        return self.model.optim_state_dict_to_load(self.model, optim, optim_state_dict, kwargs)
+        return self.model.optim_state_dict_to_load(self.model, optim,
+                                                   optim_state_dict, **kwargs)

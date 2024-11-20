@@ -110,4 +110,4 @@ def rendezvous(tag, payload=b'', replicas=[]):
     The payloads exchanged by all the other cores, with the payload of core
     ordinal `i` at position `i` in the returned tuple.
   """
-    return xm.rendezvous(payload, replicas or None, tag=tag)
+    return xm.rendezvous(tag, payload, replicas)

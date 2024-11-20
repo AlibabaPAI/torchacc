@@ -31,9 +31,9 @@ class Net(torch.nn.Module):
 
 def _init_model(size, config: Config):
     model = Net(size)
-    model = ta.accelerate(model, config=config)
+    model = FSDP(model, config)
     optim = torch.optim.AdamW(model.parameters(), lr=0.1)
-    
+
     return model, optim
 
 
@@ -43,7 +43,7 @@ def _train(model: torch.nn.Module,
            num_iters: int = 1):
     optim.zero_grad()
     batch_size = model_size
-    device = model.device
+    device = ta.lazy_device()
 
     for i in range(num_iters):
         data = torch.rand(batch_size, model_size).to(device)
@@ -60,7 +60,7 @@ def _train_without_update(model: torch.nn.Module,
     # do forward and backward and no optim.step()
     optim.zero_grad()
     batch_size = model_size
-    device = model.device
+    device = ta.lazy_device()
 
     data = torch.rand(batch_size, model_size).to(device)
     labels = torch.zeros(batch_size, dtype=torch.int64).to(device)
@@ -100,15 +100,12 @@ def _get_fsdp_osd_1(world_size,
                     model_size,
                     full_state_dict: bool = True,
                     rank0_only: bool = True,
-                    flatten: bool = True,
-                    backend: str = 'lazy'):
+                    flatten: bool = True):
     config1 = Config()
     config1.dist.fsdp.size = world_size
     config1.dist.fsdp.flatten_parameters = flatten
-    config1.backend = backend
 
     model_1, optim_1 = _init_model(model_size, config=config1)
-    
     # iter 10 steps
     _train(model_1, optim_1, model_size, 10)
 
@@ -129,21 +126,16 @@ def _get_fsdp_osd_2(world_size,
                     fsdp_osd1,
                     full_state_dict: bool = True,
                     rank0_only: bool = True,
-                    flatten: bool = True,
-                    backend: str = 'lazy'):
+                    flatten: bool = True):
     # init a new model with new world_size
     config2 = Config()
     config2.dist.fsdp.size = world_size
     config2.dist.fsdp.flatten_parameters = flatten
-    #config2.backend = backend
     model_2, optim_2 = _init_model(model_size, config=config2)
 
     if rank not in new_group_rank:
         return
-    
     # model_2 load the optim_state_dict from model_1
-    print(fsdp_osd1)
-    
     fsdp_osd_to_load = FSDP.optim_state_dict_to_load(
         model_2, optim_2, fsdp_osd1, rank0_only=rank0_only)
 
@@ -163,7 +155,7 @@ class FSDPOptimStateTest(MultiProcessTestBase):
     @property
     def world_size(self) -> int:
         return 4
-    
+
     @skip_if_lt_x_gpu(2)
     @init_pg("lazy")
     def test_fsdp4_full_optim_state_rank0_only_flatten(self):
@@ -349,4 +341,3 @@ class FSDPOptimStateTest(MultiProcessTestBase):
             rank0_only=rank0_only)
         _check_optim_state(fsdp_osd1, fsdp_osd2)
         _check_optim_param_groups(fsdp_osd1, fsdp_osd2)
-    
