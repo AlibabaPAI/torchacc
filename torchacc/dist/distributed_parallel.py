@@ -88,7 +88,8 @@ class DistributedParallel(ParallelModule):
                 "sharded_optim_state_dict is only support for FullyShardedDataParallel"
             )
 
-        return self.model.sharded_optim_state_dict(self.model, optim)
+        return FullyShardedDataParallel.sharded_optim_state_dict(
+            self.model, optim)
 
     def full_optim_state_dict(self, optim: torch.optim.Optimizer, **kwargs):
         if not self.has_fsdp or self.spmd_fsdp:
@@ -96,7 +97,8 @@ class DistributedParallel(ParallelModule):
                 "full_optim_state_dict is only support for FullyShardedDataParallel"
             )
 
-        return self.model.full_optim_state_dict(self.model, optim, **kwargs)
+        return FullyShardedDataParallel.full_optim_state_dict(
+            self.model, optim, **kwargs)
 
     def optim_state_dict_to_load(self, optim, optim_state_dict: Dict[str, Any],
                                  **kwargs):
@@ -105,5 +107,5 @@ class DistributedParallel(ParallelModule):
                 "optim_state_dict_to_load is only support for FullyShardedDataParallel"
             )
 
-        return self.model.optim_state_dict_to_load(self.model, optim,
-                                                   optim_state_dict, **kwargs)
+        return FullyShardedDataParallel.optim_state_dict_to_load(
+            self.model, optim, optim_state_dict, **kwargs)

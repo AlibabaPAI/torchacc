@@ -250,8 +250,12 @@ class FullyShardedDataParallel(ParallelModule):
                 parameters.
 
         Returns:
-            Dict[str, Any]: A :class:`dict` containing the optimizer state for
-            fsdp model. Each rank get the sharded optim state added with shard_metadata.
+            lazy backend:
+                Dict[str, Any]: A :class:`dict` containing the sharded optimizer state for
+                fsdp model and shard_meta_data.
+            eager backend:
+                Dict[str, Any]: A :class:`dict` containing the sharded optimizer state for
+                fsdp model.
         """
         # get the inner fsdp model
         while hasattr(model, 'model'):
@@ -266,7 +270,7 @@ class FullyShardedDataParallel(ParallelModule):
                           xla_fsdp.XlaFullyShardedDataParallel) or isinstance(
                               model, torch_fsdp.FullyShardedDataParallel)
 
-        # eager backend
+        # eager backend, return the sharded state_dict directly.
         if isinstance(model, torch_fsdp.FullyShardedDataParallel):
             optim_state = {"optimizer": optim.state_dict()}
             return optim_state
@@ -297,9 +301,10 @@ class FullyShardedDataParallel(ParallelModule):
         
         Note: This method work for both lazy and eager mode in torchacc. For eager mode,
         we call the function optim_state_dict() 
-        in pytorch fsdp and set dict_type to FULL_STATE_DICT(https://pytorch.org/docs/2.3/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel.optim_state_dict)
+        in pytorch fsdp and set dict_type to FULL_STATE_DICT
+        (https://pytorch.org/docs/2.3/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel.optim_state_dict)
         The full_state_dict() method in pytorch fsdp does not have the same function semantics 
-        with our method.
+        as our method.
         
         Args:
             model (torch.nn.Module): FSDP model(torchacc or xla FSDP) whose parameters were 
@@ -354,7 +359,8 @@ class FullyShardedDataParallel(ParallelModule):
             )
 
             return torch_FSDP.optim_state_dict(model, optim, group=group)
-            #return torch_fsdp.FullyShardedDataParallel.full_optim_state_dict(model, optim, optim_input=optim_input, rank0_only=rank0_only, group=group)
+
+        # lazy backend
         shard_meta_data = model.get_shard_metadata()
         sharded_optim_state = optim.state_dict()['state']
         optim_state_param_groups = optim.state_dict()['param_groups']
@@ -399,11 +405,11 @@ class FullyShardedDataParallel(ParallelModule):
                 if not rank0_only or model.rank == 0:
                     for fn, fp in zip(layer_names, orig_params):
                         if cpu_offload:
-                            ta.mark_step()  # tensor evaluation
+                            ta.sync()  # tensor evaluation
                             unflat_state_dict[fn][state_name] = fp.cpu()
                         else:
                             unflat_state_dict[fn][state_name] = fp
-                ta.mark_step()
+                ta.sync()
         consolidate_optim_state_dict['state'] = unflat_state_dict
 
         return consolidate_optim_state_dict
@@ -417,17 +423,18 @@ class FullyShardedDataParallel(ParallelModule):
         Convert an optimizer state-dict so that it can be loaded into the
         optimizer associated with the FSDP model.
         We check whether the optim_state_dict is sharded automatically.
-        For shard optim_state_dict, the rank_only must be False, and we return
-        the shard optim_state_dict directly.
+        For sharded optim_state_dict, the rank0_only must be False, and we return
+        the sharded optim_state_dict directly.
         
         Note: This method work for both lazy and eager mode in torchacc. For eager mode,
         we call the function optim_state_dict_to_load() 
-        in pytorch fsdp and set dict_type to FULL_STATE_DICT(https://pytorch.org/docs/2.3/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel.optim_state_dict_to_load)
+        in pytorch fsdp and set dict_type to FULL_STATE_DICT
+        (https://pytorch.org/docs/2.3/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel.optim_state_dict_to_load)
         
         Args:
             model (torch.nn.Module): FSDP model(torchacc or xla) whose parameters were 
             passed into the optimizer whose state_dict is ``optim_state_dict``.
-            optim (torch.optim.Optimizer): 
+            optim (torch.optim.Optimizer): Optimizer for model 's parameters.
             optim_state_dict (Dict[str, Any]): The optimizer states to be loaded.
             kwargs:
                 The args below are specified for torchacc fsdp:
@@ -439,7 +446,7 @@ class FullyShardedDataParallel(ParallelModule):
                     https://pytorch.org/docs/2.3/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel.optim_state_dict_to_load
         Returns:
             Dict[str, Any]: A :class:`dict` containing the optimizer state for
-            model which is sharded.
+            model which is sharded for each rank.
         """
         # get the inner fsdp model
         while hasattr(model, 'model'):
@@ -457,7 +464,7 @@ class FullyShardedDataParallel(ParallelModule):
         rank0_only = kwargs.get('rank0_only', True)
         # eager backend
         if isinstance(model, torch_fsdp.FullyShardedDataParallel):
-            # shard optimizer, return directly
+            # sharded optimizer, return directly
             if 'optimizer' in optim_state_dict.keys():
                 return optim_state_dict['optimizer']
 
@@ -480,8 +487,7 @@ class FullyShardedDataParallel(ParallelModule):
                 load_directly=load_directly,
                 group=group)
 
-            #return torch_fsdp.FullyShardedDataParallel.optim_state_dict_to_load(model, optim, optim_state_dict, is_named_optimizer=is_named_optimizer, load_directly=load_directly, group=group)
-
+        # lazy backend
         shard_meta_data = model.get_shard_metadata()
         if optim_state_dict is None:
             if not rank0_only or model.rank == 0:
@@ -549,7 +555,7 @@ class FullyShardedDataParallel(ParallelModule):
 
                 if len(flat_tensor):
                     flat_value[state_name] = model._get_shard(flat_tensor)
-                ta.mark_step()
+                ta.sync()
 
             flat_optim_state['state'][idx] = flat_value
 
