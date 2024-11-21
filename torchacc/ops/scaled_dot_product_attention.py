@@ -16,10 +16,5 @@ def scaled_dot_product_attention(query,
 
     is_causal = attn_mask is not None or is_causal
     output = flash_attn_xla(
-        query,
-        key,
-        value,
-        dropout_p,
-        softmax_scale=None,
-        causal=is_causal)
+        query, key, value, dropout_p, softmax_scale=None, causal=is_causal)
     return output
