@@ -275,6 +275,7 @@ class FullyShardedDataParallel(ParallelModule):
             optim_state = {"optimizer": optim.state_dict()}
             return optim_state
 
+        # lazy backend
         optim_state = {
             "optimizer": optim.state_dict(),
             "shard_metadata": model.get_shard_metadata(),
