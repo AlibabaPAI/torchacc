@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from flash_attn import flash_attn_func, flash_attn_varlen_func
 
 import torchacc as ta
-from torchacc.ops import flash_attn_varlen_xla
+from torchacc.ops import flash_attn_xla, flash_attn_varlen_xla
 
 
 def unflatten_output(shape, out, cu_seqlens):
@@ -29,37 +29,19 @@ def flash_attn_fixed_len(
     alibi_slopes: Optional[tuple] = None,
     deterministic: bool = False,
 ) -> torch.Tensor:
-    bsz, seq_q, nhead, headdim = q.shape
-    seq_k = k.shape[1]
+    bsz, seq_q, _, _ = q.shape
     if ta.is_lazy_tensor(q):
-        q = q.flatten(0, 1).contiguous()
-        k = k.flatten(0, 1).contiguous()
-        v = v.flatten(0, 1).contiguous()
-        cu_seqlens_q = torch.arange(
-            0, (bsz + 1) * seq_q,
-            step=seq_q,
-            dtype=torch.int32,
-            device=q.device)
-        cu_seqlens_k = torch.arange(
-            0, (bsz + 1) * seq_k,
-            step=seq_k,
-            dtype=torch.int32,
-            device=k.device)
-        out = flash_attn_varlen_xla(
+        out = flash_attn_xla(
             q,
             k,
             v,
-            cu_seqlens_q,
-            cu_seqlens_k,
-            seq_q,
-            seq_k,
             dropout_p=dropout_p,
             softmax_scale=softmax_scale,
             causal=causal,
             window_size=window_size,
             alibi_slopes=alibi_slopes,
             deterministic=deterministic,
-        ).unflatten(0, (bsz, seq_q))
+        )
     else:
         out = flash_attn_func(
             q,
@@ -107,26 +89,15 @@ def flash_attention(
     if k_lens is None:
         k_lens = torch.tensor([seq_k] * bsz, dtype=torch.int32)
 
-    q = torch.cat([u[:l] for u, l in zip(q, q_lens)])
-    k = torch.cat([u[:l] for u, l in zip(k, k_lens)])
-    v = torch.cat([u[:l] for u, l in zip(v, k_lens)])
-
-    cu_seqlens_q = torch.cat([q_lens.new_zeros([1]), q_lens]).cumsum(
-        0, dtype=torch.int32).to(
-            q.device, non_blocking=True)
-    cu_seqlens_k = torch.cat([k_lens.new_zeros([1]), k_lens]).cumsum(
-        0, dtype=torch.int32).to(
-            k.device, non_blocking=True)
-
     if ta.is_lazy_tensor(q):
+        cols = torch.arange(seq_k, device=k.device).unsqueeze(0)
+        mask = cols < k_lens.to(k.device, non_blocking=True).unsqueeze(1)
+        # FIXME(wenting.swt): support seperate attention_mask for q and k
         out = flash_attn_varlen_xla(
             q,
             k,
             v,
-            cu_seqlens_q,
-            cu_seqlens_k,
-            seq_q,
-            seq_k,
+            mask,
             dropout_p=dropout_p,
             softmax_scale=softmax_scale,
             causal=causal,
@@ -134,7 +105,18 @@ def flash_attention(
             alibi_slopes=alibi_slopes,
             deterministic=deterministic,
         )
+        return out
     else:
+        q = torch.cat([u[:l] for u, l in zip(q, q_lens)])
+        k = torch.cat([u[:l] for u, l in zip(k, k_lens)])
+        v = torch.cat([u[:l] for u, l in zip(v, k_lens)])
+
+        cu_seqlens_q = torch.cat([q_lens.new_zeros([1]), q_lens]).cumsum(
+            0, dtype=torch.int32).to(
+                q.device, non_blocking=True)
+        cu_seqlens_k = torch.cat([k_lens.new_zeros([1]), k_lens]).cumsum(
+            0, dtype=torch.int32).to(
+                k.device, non_blocking=True)
         out = flash_attn_varlen_func(
             q,
             k,
@@ -151,8 +133,8 @@ def flash_attention(
             deterministic=deterministic,
         )
 
-    return unflatten_output((bsz, seq_q, nhead, headdim), out,
-                            cu_seqlens_q).clone()
+        return unflatten_output((bsz, seq_q, nhead, headdim), out,
+                                cu_seqlens_q).clone()
 
 
 def all_gather(tensor: torch.Tensor,

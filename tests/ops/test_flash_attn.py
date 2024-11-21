@@ -59,8 +59,8 @@ def setup_env():
     ],
 )
 @pytest.mark.parametrize("dropout_p", [0.0, 0.17])
-def test_flash_attn_varlen_output(seqlen_q, seqlen_k, d, dropout_p, causal,
-                                  local, alibi, deterministic, mha_type, dtype):
+def test_flash_attn_output(seqlen_q, seqlen_k, d, dropout_p, causal, local,
+                           alibi, deterministic, mha_type, dtype):
     # TODO(to wenting.swt): maybe we need support this
     if d % 8 != 0:
         pytest.skip(reason="Expected head_size_og % 8 == 0 to be true")
@@ -149,32 +149,19 @@ def test_flash_attn_varlen_output(seqlen_q, seqlen_k, d, dropout_p, causal,
     q.requires_grad = True
     k.requires_grad = True
     v.requires_grad = True
-    cu_seqlens_q = torch.arange(
-        0, (batch_size + 1) * seqlen_q,
-        step=seqlen_q,
-        dtype=torch.int32,
-        device=q.device)
-    cu_seqlens_k = torch.arange(
-        0, (batch_size + 1) * seqlen_k,
-        step=seqlen_k,
-        dtype=torch.int32,
-        device=q.device)
+
     if alibi:
         alibi_slopes = alibi_slopes.cpu().to(device)
-    out_xla = ta.ops.flash_attn_varlen_xla(
-        q.flatten(0, 1),
-        k.flatten(0, 1),
-        v.flatten(0, 1),
-        cu_seqlens_q,
-        cu_seqlens_k,
-        seqlen_q,
-        seqlen_k,
-        dropout_p,
+    out_xla = ta.ops.flash_attn_xla(
+        q,
+        k,
+        v,
+        dropout_p=dropout_p,
         causal=causal,
         window_size=window_size,
         alibi_slopes=alibi_slopes,
         deterministic=deterministic,
-    ).unflatten(0, (-1, seqlen_q))
+    )
     g = g.to(device)
     (
         dq_xla,
