@@ -132,6 +132,6 @@ def _set_env():
     os.environ["XLA_FLAGS"] = xla_flags
 
 
-patch.patch_fa()
-decompose.replace_decompose()
+# patch.patch_fa()
+# decompose.replace_decompose()
 _set_env()

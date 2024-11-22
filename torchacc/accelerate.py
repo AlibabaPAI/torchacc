@@ -71,6 +71,10 @@ def accelerate(
         ta.dist.init_nccl_context(config)
 
     if config.is_eager_backend():
+        if hasattr(model, "config"):
+            model.config.use_cache = False
+        elif hasattr(model, "model"):
+            model.model.config.use_cache = False
         if dist.is_initialized():
             device = dist.get_rank() % torch.cuda.device_count()
         else:
@@ -92,6 +96,7 @@ def accelerate(
     if config.compute.acc_scaled_dot_attn:
         torch.nn.functional.scaled_dot_product_attention = ta.ops.scaled_dot_product_attention
 
+    config.compute.disable_kernel_patches = True
     if not config.compute.disable_kernel_patches and config.is_eager_backend():
         ta.ops.apply_liger_kernel()
 
@@ -120,8 +125,8 @@ def accelerate(
 
     # gradient checkpoint
     if config.memory.gc and config.memory.gc_cls is not None:
-        if config.dist.fsdp.size > 1:
-            # full gc has already been done by fsdp
+        if config.dist.fsdp.size > 1 and config.is_lazy_backend():
+            # full gc has already been done by xla fsdp
             if len(config.memory.gc_cls) > 0 and \
                     (config.memory.gc_cls != config.dist.fsdp.wrap_layer_cls):
                 underlay_model = model._get_underlay_model()
@@ -132,7 +137,9 @@ def accelerate(
                 underlay_model = model._get_underlay_model()
                 underlay_model = checkpoint.gradient_checkpoint(
                     underlay_model, config.memory.gc_cls)
-                model._update_underlay_model(underlay_model)
+                # PyTorch checkpoint modify model inplace
+                if not config.is_eager_backend():
+                    model._update_underlay_model(underlay_model)
             else:
                 model = checkpoint.gradient_checkpoint(model,
                                                        config.memory.gc_cls)
@@ -145,5 +152,22 @@ def accelerate(
 
     if not hasattr(model, "device"):
         model.device = device
+
+    if config.is_eager_backend():
+        torch._dynamo.disallow_in_graph(torch.nn.functional.scaled_dot_product_attention)
+        model = torch.compile(model, backend="openxla")
+
+        cuda_device = dist.get_rank() % torch.cuda.device_count() if dist.is_initialized() else 0
+        stream = torch_xla._XLAC._get_stream_for_cuda_device(cuda_device)
+        stream = 1 if stream == 0 else stream
+        assert stream is None or type(stream) is int
+        external_stream = torch.cuda.ExternalStream(stream)
+        torch.cuda.set_stream(external_stream)
+    
+    # if dist.get_rank() == 0:
+    #     import logging
+    #     # torch._logging.set_logs(graph_breaks=True, recompiles=True, graph=True)
+    #     # torch._logging.set_logs(all=logging.DEBUG)
+    #     torch._logging.set_logs(dynamo=logging.DEBUG)
 
     return (model, dataloader) if dataloader else model

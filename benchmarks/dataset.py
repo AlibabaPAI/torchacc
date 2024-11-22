@@ -65,5 +65,7 @@ def get_hf_dataset_loader(tokenizer,
         batch_size=batch_size,
         collate_fn=transformers.default_data_collator,
         sampler=train_sampler,
+        pin_memory=True,
+        num_workers=4,
         drop_last=True)
     return train_dataloader
