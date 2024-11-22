@@ -7,7 +7,6 @@ from typing import Any, Dict, Optional, Set
 import torch
 import torch.distributed.fsdp as torch_fsdp
 import torch.fx as fx
-import torch_xla.distributed.fsdp as xla_fsdp
 from torch.distributed.fsdp import (FullOptimStateDictConfig,
                                     FullStateDictConfig)
 from torch.distributed.fsdp import FullyShardedDataParallel as torch_FSDP
@@ -21,6 +20,10 @@ import torchacc.utils.trace as trace
 import torchacc.utils.utils as utils
 from torchacc.config import Config
 from torchacc.dist import ParallelModule
+
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla.distributed.fsdp as xla_fsdp
 
 
 def split_fsdp_wrap_modules(

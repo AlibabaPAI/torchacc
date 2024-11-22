@@ -1,11 +1,14 @@
 import torch
-import torch_xla.core.xla_model as xm
 
 from .async_loader import AsyncLoader
 
-save = xm.save
-mark_step = xm.mark_step
-send_cpu_data_to_device = xm.send_cpu_data_to_device
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla.core.xla_model as xm
+
+    save = xm.save
+    mark_step = xm.mark_step
+    send_cpu_data_to_device = xm.send_cpu_data_to_device
 
 
 def lazy_device():
@@ -19,6 +22,8 @@ def is_lazy_device(device: torch.device):
 
 
 def is_lazy_tensor(tensor: torch.tensor):
+    if not is_torch_xla_available():
+        return False
     return xm.is_xla_tensor(tensor)
 
 
@@ -41,4 +46,7 @@ def sync(wait: bool = False):
         wait (bool): Wait utils the graph execution finished if True. Otherwise, execute the
     computation graph asynchronously.
     """
+    if not is_torch_xla_available():
+        return
+    print("sync!")
     mark_step(wait)

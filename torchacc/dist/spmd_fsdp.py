@@ -2,16 +2,19 @@ import functools
 
 import numpy as np
 import torch
-import torch_xla.runtime as xr
-import torch_xla.distributed.spmd as xs
-from torch_xla.distributed.fsdp.wrap import transformer_auto_wrap_policy
-from torch_xla.experimental.spmd_fully_sharded_data_parallel import SpmdFullyShardedDataParallel as FSDPv2
 
 from torchacc.core import lazy_device
 from torchacc.config import Config
 from torchacc.dist import ParallelModule
 import torchacc.utils.checkpoint as checkpoint
 import torchacc.utils.utils as utils
+
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla.runtime as xr
+    import torch_xla.distributed.spmd as xs
+    from torch_xla.distributed.fsdp.wrap import transformer_auto_wrap_policy
+    from torch_xla.experimental.spmd_fully_sharded_data_parallel import SpmdFullyShardedDataParallel as FSDPv2
 
 
 class SpmdFullyShardedDataParallel(ParallelModule):

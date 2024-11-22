@@ -2,11 +2,14 @@ import inspect
 from functools import wraps
 
 import torch
-from torch_xla.amp import syncfree
 
 import torchacc.ops as ops
 from torchacc.core import amp
 from torchacc.utils.logger import logger
+
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    from torch_xla.amp import syncfree
 
 
 def _patch_functions(fn, newfn):

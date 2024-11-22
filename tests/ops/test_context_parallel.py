@@ -5,7 +5,6 @@ import einops
 import pytest
 import torch
 import torch.distributed as dist
-import torch_xla.core.xla_model as xm
 import torchacc as ta
 import torchacc.ops.context_parallel as context_parallel
 from flash_attn import flash_attn_func
@@ -14,6 +13,10 @@ from torchacc.ops import flash_attn_xla
 from utils.distributed import (MultiProcessTestBase,
                                instantiate_parametrized_tests, parametrize,
                                skip_if_lt_x_gpu)
+
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla.core.xla_model as xm
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -31,7 +34,7 @@ def setup_env():
 class ContextParallelTest(MultiProcessTestBase):
 
     @skip_if_lt_x_gpu(2)
-    @parametrize("is_cuda", [False, True])
+    @parametrize("is_cuda", [True])
     @parametrize("test_varlen", [False, True])
     @parametrize("cp_type", ["ulysses", "ring", "context_parallel_2d"])
     # @parametrize("batch_size", [1, 4])

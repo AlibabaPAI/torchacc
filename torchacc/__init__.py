@@ -1,23 +1,24 @@
 import os
 from dataclasses import dataclass, field
 
-from torch_xla.amp import syncfree
-
 from . import dist, ops
 from .config import Config
 from .core import (AsyncLoader, amp, fetch_gradients, is_lazy_device,
-                   is_lazy_tensor, lazy_device, mark_step, save,
-                   send_cpu_data_to_device, sync)
+                   is_lazy_tensor, lazy_device, sync)
 from .core.accelerate_hf_trainer import accelerate_hf_trainer
 from .core.dynamic import mark_dynamic
 from .llm.qwen_patch import patch_qwen_model
-from .utils import decompose, patch
+from .utils import decompose, patch, import_utils
 from .version import __version__
 
 from .accelerate import accelerate  # isort: skip
 
 _XLA_COORDINATOR_PORT_OFFSET = 10
 _global_context = None
+
+if import_utils.is_torch_xla_available():
+    from torch_xla.amp import syncfree
+    from .core import mark_step, save, send_cpu_data_to_device
 
 
 @dataclass
