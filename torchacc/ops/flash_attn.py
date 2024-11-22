@@ -225,10 +225,14 @@ class FlashAttnXla(torch.autograd.Function):
         k = einops.rearrange(k, "b s ... -> (b s) ...")
         v = einops.rearrange(v, "b s ... -> (b s) ...")
 
-        softmax_lse, out, rng_state = torch_xla._XLAC._flash_attention_forward(
+        softmax_lse, out, rng_state = torch.ops.torchacc.flash_attention_forward(
             q, k, v, cu_q_lens, cu_q_lens, alibi_slopes, q_len, q_len,
             dropout_p, softmax_scale, False, causal, window_size[0],
-            window_size[1], return_softmax, None)
+            window_size[1], return_softmax)
+        # softmax_lse, out, rng_state = torch_xla._XLAC._flash_attention_forward(
+        #     q, k, v, cu_q_lens, cu_q_lens, alibi_slopes, q_len, q_len,
+        #     dropout_p, softmax_scale, False, causal, window_size[0],
+        #     window_size[1], return_softmax, None)
         out = out.to(q.dtype)
 
         ctx.save_for_backward(q, k, v, out, softmax_lse, cu_q_lens, rng_state)
@@ -248,11 +252,16 @@ class FlashAttnXla(torch.autograd.Function):
         q, k, v, out, softmax_lse, cu_q_lens, rng_state = ctx.saved_tensors
 
         dout = einops.rearrange(dout, "b s ... -> (b s) ...", b=ctx.bsz)
-        dq, dk, dv, softmax_d = torch_xla._XLAC._flash_attention_backward(
+        dq, dk, dv, softmax_d = torch.ops.torchacc.flash_attention_backward(
             dout, q, k, v, out, softmax_lse, cu_q_lens, cu_q_lens,
             ctx.alibi_slopes, ctx.max_seqlen, ctx.max_seqlen, ctx.dropout_p,
             ctx.softmax_scale, False, ctx.causal, ctx.window_size[0],
-            ctx.window_size[1], ctx.deterministic, None, rng_state)
+            ctx.window_size[1], ctx.deterministic, rng_state)
+        # dq, dk, dv, softmax_d = torch_xla._XLAC._flash_attention_backward(
+        #     dout, q, k, v, out, softmax_lse, cu_q_lens, cu_q_lens,
+        #     ctx.alibi_slopes, ctx.max_seqlen, ctx.max_seqlen, ctx.dropout_p,
+        #     ctx.softmax_scale, False, ctx.causal, ctx.window_size[0],
+        #     ctx.window_size[1], ctx.deterministic, None, rng_state)
 
         dq = einops.rearrange(dq, "(b s) ... -> b s ...", b=ctx.bsz)
         dk = einops.rearrange(dk, "(b s) ... -> b s ...", b=ctx.bsz)
@@ -368,6 +377,7 @@ def flash_attn_varlen_xla(
     )
 
 
+@torch.compiler.allow_in_graph
 def flash_attn_xla(
     q,
     k,
@@ -394,3 +404,36 @@ def flash_attn_xla(
         deterministic,
         return_attn_probs,
     )
+
+
+torch.library.define("torchacc::flash_attention_forward", "(Tensor q, Tensor k, Tensor v, Tensor cu_q_lens, Tensor cu_k_lens, Tensor? alibi_slopes, int max_seqlen_q, int max_seqlen_k, float p_dropout, float softmax_scale, bool zero_tensors, bool is_causal, int window_size_left, int window_size_right, bool return_softmax) -> (Tensor softmax_lse, Tensor out, Tensor rng_state)")
+
+
+@torch.library.impl("torchacc::flash_attention_forward", "default")
+def flash_attention_forward(q, k, v, cu_q_lens, cu_k_lens, alibi_slopes, max_seqlen_q, max_seqlen_k, p_dropout, softmax_scale, zero_tensors, is_causal, window_size_left, window_size_right, return_softmax):
+    return torch_xla._XLAC._flash_attention_forward(q, k, v, cu_q_lens, cu_k_lens, alibi_slopes, max_seqlen_q, max_seqlen_k, p_dropout, softmax_scale, zero_tensors, is_causal, window_size_left, window_size_right, return_softmax, None)
+
+@torch.library.impl_abstract("torchacc::flash_attention_forward")
+def flash_attention_forward_abstract(q, k, v, cu_q_lens, cu_k_lens, alibi_slopes, max_seqlen_q, max_seqlen_k, p_dropout, softmax_scale, zero_tensors, is_causal, window_size_left, window_size_right, return_softmax):
+    total_q, head_size, _ = q.shape
+    bsz = total_q // max_seqlen_q
+    out = torch.empty_like(q)
+    softmax_lse = q.new_empty([bsz, head_size, max_seqlen_q], dtype=torch.float32)
+    rng_state = q.new_empty([2], dtype=torch.int64)
+    return softmax_lse, out, rng_state
+
+
+torch.library.define("torchacc::flash_attention_backward", "(Tensor dout, Tensor q, Tensor k, Tensor v, Tensor out, Tensor softmax_lse, Tensor cu_q_lens, Tensor cu_k_lens, Tensor? alibi_slopes, int max_seqlen_q, int max_seqlen_k, float p_dropout, float softmax_scale, bool zero_tensors, bool is_causal, int window_size_left, int window_size_right, bool deterministic, Tensor rng_state) -> (Tensor dq, Tensor dk, Tensor dv, Tensor softmax_d)")
+
+
+@torch.library.impl("torchacc::flash_attention_backward", "default")
+def flash_attention_backward(dout, q, k, v, out, softmax_lse, cu_q_lens, cu_k_lens, alibi_slopes, max_seqlen_q, max_seqlen_k, p_dropout, softmax_scale, zero_tensors, is_causal, window_size_left, window_size_right, deterministic, rng_state):
+    return torch_xla._XLAC._flash_attention_backward(dout, q, k, v, out, softmax_lse, cu_q_lens, cu_k_lens, alibi_slopes, max_seqlen_q, max_seqlen_k, p_dropout, softmax_scale, zero_tensors, is_causal, window_size_left, window_size_right, deterministic, None, rng_state)
+
+@torch.library.impl_abstract("torchacc::flash_attention_backward")
+def flash_attention_backward_abstract(dout, q, k, v, out, softmax_lse, cu_q_lens, cu_k_lens, alibi_slopes, max_seqlen_q, max_seqlen_k, p_dropout, softmax_scale, zero_tensors, is_causal, window_size_left, window_size_right, deterministic, rng_state):
+    dq = torch.empty_like(q)
+    dk = torch.empty_like(k)
+    dv = torch.empty_like(v)
+    softmax_d = torch.empty_like(softmax_lse)
+    return dq, dk, dv, softmax_d

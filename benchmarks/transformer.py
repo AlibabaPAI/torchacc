@@ -12,6 +12,8 @@ from torch.utils.tensorboard import SummaryWriter
 from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
                           get_scheduler)
 
+import torch_xla
+import torch_xla.core.xla_model as xm
 
 def _args_validation(args):
     if not args.acc:
@@ -36,7 +38,7 @@ def _parse_args():
         '--dataset_config', type=str, default='wikitext-2-raw-v1')
     parser.add_argument('--model_name', type=str, default='gpt2')
     parser.add_argument('--model_block', type=str, default='GPT2Block')
-    parser.add_argument('--tb_folder', type=str, default='./log/tb/')
+    parser.add_argument('--tb_folder', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--max_seq_length', type=int, default=512)
     parser.add_argument('--log_interval', type=int, default=1)
@@ -95,11 +97,12 @@ def _get_config(args):
 def _build_model_and_loader(args):
     config = AutoConfig.from_pretrained(
         args.model_name, cache_dir='./log/model_cache')
+    config.use_cache = False
     if args.use_flash_attn:
         model = AutoModelForCausalLM.from_config(
             config, attn_implementation='flash_attention_2')
     else:
-        model = AutoModelForCausalLM.from_config(config)
+        model = AutoModelForCausalLM.from_config(config, attn_implementation='eager')
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=False)
     tokenizer.model_max_length = args.max_seq_length
@@ -113,6 +116,8 @@ def _build_model_and_loader(args):
     if args.acc:
         config = _get_config(args)
         model, train_loader = ta.accelerate(model, train_loader, config)
+        if args.backend == "lazy" and args.use_flash_attn:
+            ta.utils.patch.patch_llama(True)
     else:
         model = model.to(args.local_rank)
         model = torch.nn.parallel.DistributedDataParallel(model)
@@ -142,16 +147,18 @@ def train_gpt(args):
     amp_dtype = torch.float16 if args.fp16 else torch.bfloat16
 
     model.train()
-    if args.global_rank == 0:
+    if args.global_rank == 0 and args.tb_folder:
         writer = SummaryWriter(
-            f'./{args.tb_folder}/{args.model_name}_acc-{args.acc}_gpu-{args.world_size}_'
+            f'./{args.tb_folder}/{args.model_name.split("/")[-1]}_acc-{args.backend}_gpu-{args.world_size}_'
             f'amp-{amp_enabled}-{amp_dtype}_'
             f'dp-{args.dp_size}_pp-{args.pp_size}_fsdp-{args.fsdp_size}_'
             f'tp-{args.tp_size}-bs{args.batch_size}_'
             f'disable_loss_print-{args.disable_loss_print}')
         writer.add_text('args', str(args))
+    else:
+        writer = None
 
-    if args.profile:
+    if args.global_rank == 0 and args.profile:
         prof = torch.profiler.profile(
             schedule=torch.profiler.schedule(wait=2, warmup=2, active=6),
             on_trace_ready=torch.profiler.tensorboard_trace_handler(
@@ -191,26 +198,36 @@ def train_gpt(args):
                     step = step + epoch * len(train_loader)
                     time_cost = time.time() - iteration_time
                     iteration_time = time.time()
-                    writer.add_scalar(
-                        'samples/s',
-                        args.batch_size / time_cost,
-                        global_step=step)
-                    writer.add_scalar('loss', loss, global_step=step)
-                    writer.add_scalar(
-                        'lr', lr_scheduler.get_last_lr()[0], global_step=step)
+                    if writer is not None:
+                        writer.add_scalar(
+                            'samples/s',
+                            args.batch_size / time_cost,
+                            global_step=step)
+                        writer.add_scalar('loss', loss, global_step=step)
+                        writer.add_scalar(
+                            'lr', lr_scheduler.get_last_lr()[0], global_step=step)
                     logger.info(
                         f'[Iteration {step}/{len(train_loader)*args.num_train_epochs}] '
-                        f'loss: {loss:.2f}, lr: {lr_scheduler.get_last_lr()[0]}, '
+                        f'loss: {loss:.6f}, '
                         f'complete in {time_cost:.2f} s')
                 pbar.update(1)
-                if args.profile:
+                if args.global_rank == 0 and args.profile:
                     prof.step()
 
 
 if __name__ == '__main__':
-    torch.manual_seed(42)
+    seed = 101
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.deterministic = True
-    torch.cuda.manual_seed_all(42)
+    torch.backends.cudnn.benchmark = False
+    os.environ['CUBLAS_WORKSPACE_CONFIG']=':4096:8'
+    os.environ['TF_CUDNN_DETERMINISTIC']='1'
+    os.environ['TF_DETERMINISTIC_OPS']='1'
+    xm.set_rng_state(seed)
+    torch_xla._XLAC._xla_set_use_full_mat_mul_precision(
+      use_full_mat_mul_precision=True)
 
     args = _parse_args()
 
