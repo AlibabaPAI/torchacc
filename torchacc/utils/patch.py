@@ -184,8 +184,6 @@ def patch_qwen(use_flash_attn):
 
             src = re.sub(pattern1, replacement, src)
             src = re.sub(pattern2, replacement, src)
-            print("after patch")
-            print(src)
             dict_src = \
             """\nQWEN2_ATTENTION_CLASSES = {
             "eager": Qwen2Attention,
