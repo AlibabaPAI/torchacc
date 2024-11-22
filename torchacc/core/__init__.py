@@ -1,4 +1,5 @@
 import torch
+import warnings
 
 from .async_loader import AsyncLoader
 
@@ -12,7 +13,7 @@ if is_torch_xla_available():
 
 
 def lazy_device():
-    if not is_torch_xla_available() and self.backend == 'lazy':
+    if not is_torch_xla_available():
         raise NotImplementedError(
             "The lazy backend of TorchAcc requires the installation of torch_xla. Please use `config.backend='eager'`"
             "or follow the instructions in https://torchacc.readthedocs.io/en/stable/install.html to use the recommended Docker image."
@@ -52,5 +53,7 @@ def sync(wait: bool = False):
     computation graph asynchronously.
     """
     if not is_torch_xla_available():
+        #warnings.filterwarnings("once")
+        warnings.warn("Sync is only valid in the lazy backend of TorchAcc and has no effect in eager backend")
         return
     mark_step(wait)
