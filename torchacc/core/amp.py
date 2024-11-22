@@ -4,7 +4,7 @@ import torchacc as ta
 
 from torchacc.utils.import_utils import is_torch_xla_available
 if is_torch_xla_available():
-    import torch_xla
+    import torch_xla.amp
 
     class GradScaler(torch_xla.amp.GradScaler):
         """This is the TorchAcc version of GradScaler, which has the same functionality and args as torch.cuda.amp.GradScaler,

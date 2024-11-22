@@ -48,5 +48,4 @@ def sync(wait: bool = False):
     """
     if not is_torch_xla_available():
         return
-    print("sync!")
     mark_step(wait)
