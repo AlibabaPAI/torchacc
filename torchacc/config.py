@@ -363,7 +363,9 @@ class Config(BaseConfig):
 
         if not is_torch_xla_available() and self.backend == 'lazy':
             raise NotImplementedError(
-                "torchacc's lazy backend requires a torch_xla environment")
+                "The lazy backend of TorchAcc requires the installation of torch_xla. Please use `config.backend='eager'`"
+                "or follow the instructions in https://torchacc.readthedocs.io/en/stable/install.html to use the recommended Docker image."
+            )
 
         self.compute.validate()
         self.memory.validate()

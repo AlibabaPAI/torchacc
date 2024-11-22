@@ -12,8 +12,11 @@ if is_torch_xla_available():
 
 
 def lazy_device():
-    if not is_torch_xla_available():
-        raise NotImplemented('Lazy device require a torch_xla environment')
+    if not is_torch_xla_available() and self.backend == 'lazy':
+        raise NotImplementedError(
+            "The lazy backend of TorchAcc requires the installation of torch_xla. Please use `config.backend='eager'`"
+            "or follow the instructions in https://torchacc.readthedocs.io/en/stable/install.html to use the recommended Docker image."
+        )
     device = xm.xla_device()
     xm.set_replication(device, [device])
     return device
