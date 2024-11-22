@@ -244,7 +244,7 @@ class FullyShardedDataParallel(ParallelModule):
         Return the optimizer state-dict in its sharded form.
         
         Args:
-            model (torch.nn.Module): FSDP model(torchacc or xla) whose parameters were 
+            model (torch.nn.Module): FSDP model(torchacc or torch fsdp model) whose parameters were 
             passed into the optimizer ``optim``.
             optim (torch.optim.Optimizer): Optimizer for model's
                 parameters.
@@ -258,17 +258,18 @@ class FullyShardedDataParallel(ParallelModule):
                 fsdp model.
         """
         # get the inner fsdp model
-        while hasattr(model, 'model'):
+        # the model passed in maybe wrapped in any of the three type below:
+        # DistributedParallel -> FullyShardedDataParallel -> torch/xla FullyShardedDataParallel
+        if hasattr(model, 'model'):
             model = model.model
+            if hasattr(model, 'model'):
+                model = model.model
 
         if not isinstance(
                 model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(
                     model, torch_fsdp.FullyShardedDataParallel):
             raise NotImplementedError(
                 "The model must be xla or torch FSDP model")
-        assert isinstance(model,
-                          xla_fsdp.XlaFullyShardedDataParallel) or isinstance(
-                              model, torch_fsdp.FullyShardedDataParallel)
 
         # eager backend, return the sharded state_dict directly.
         if isinstance(model, torch_fsdp.FullyShardedDataParallel):
@@ -308,7 +309,7 @@ class FullyShardedDataParallel(ParallelModule):
         as our method.
         
         Args:
-            model (torch.nn.Module): FSDP model(torchacc or xla FSDP) whose parameters were 
+            model (torch.nn.Module): FSDP model(torchacc or torch FSDP model) whose parameters were 
             passed into the optimizer ``optim``.
             optim (torch.optim.Optimizer): Optimizer for model 's
                 parameters.
@@ -332,17 +333,18 @@ class FullyShardedDataParallel(ParallelModule):
             then nonzero ranks return an :class:`dict` with keys but empty value.
         """
         # get the inner fsdp model
-        while hasattr(model, 'model'):
+        # the model passed in maybe wrapped in any of the three type below:
+        # DistributedParallel -> FullyShardedDataParallel -> torch/xla FullyShardedDataParallel
+        if hasattr(model, 'model'):
             model = model.model
+            if hasattr(model, 'model'):
+                model = model.model
 
         if not isinstance(
                 model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(
                     model, torch_fsdp.FullyShardedDataParallel):
             raise NotImplementedError(
                 "The model must be xla or torch FSDP model")
-        assert isinstance(model,
-                          xla_fsdp.XlaFullyShardedDataParallel) or isinstance(
-                              model, torch_fsdp.FullyShardedDataParallel)
 
         rank0_only = kwargs.get('rank0_only', True)
         cpu_offload = kwargs.get('cpu_offload', True)
@@ -433,7 +435,7 @@ class FullyShardedDataParallel(ParallelModule):
         (https://pytorch.org/docs/2.3/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel.optim_state_dict_to_load)
         
         Args:
-            model (torch.nn.Module): FSDP model(torchacc or xla) whose parameters were 
+            model (torch.nn.Module): FSDP model(torchacc or torch FSDP model) whose parameters were 
             passed into the optimizer whose state_dict is ``optim_state_dict``.
             optim (torch.optim.Optimizer): Optimizer for model 's parameters.
             optim_state_dict (Dict[str, Any]): The optimizer states to be loaded.
@@ -441,7 +443,7 @@ class FullyShardedDataParallel(ParallelModule):
                 The args below are specified for torchacc fsdp:
                 rank0_only: (bool): control whether load state_dict only from
                     rank0 at the begining.(Default: ``True``). If set to True,
-                    nonzero ranks should pass None in.
+                    nonzero ranks should pass optim_state_dict as None in.
                 
                 for args used for torchacc eager mode, please refer to the docs here: 
                     https://pytorch.org/docs/2.3/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel.optim_state_dict_to_load
@@ -450,17 +452,18 @@ class FullyShardedDataParallel(ParallelModule):
             model which is sharded for each rank.
         """
         # get the inner fsdp model
-        while hasattr(model, 'model'):
+        # the model passed in maybe wrapped in any of the three type below:
+        # DistributedParallel -> FullyShardedDataParallel -> torch/xla FullyShardedDataParallel
+        if hasattr(model, 'model'):
             model = model.model
+            if hasattr(model, 'model'):
+                model = model.model
 
         if not isinstance(
                 model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(
                     model, torch_fsdp.FullyShardedDataParallel):
             raise NotImplementedError(
-                "The model must be xla or torch FSDP model")
-        assert isinstance(model,
-                          xla_fsdp.XlaFullyShardedDataParallel) or isinstance(
-                              model, torch_fsdp.FullyShardedDataParallel)
+                "The model must be torchacc or torch FSDP model")
 
         rank0_only = kwargs.get('rank0_only', True)
         # eager backend
