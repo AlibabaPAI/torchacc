@@ -76,9 +76,6 @@ def accelerate(
             device = torch.cuda.current_device()
         torch.cuda.set_device(device)
     else:
-        if not is_torch_xla_available():
-            raise NotImplementedError(
-                'Lazy backend require torch_xla environment.')
         device = ta.lazy_device()
 
     if dataloader:

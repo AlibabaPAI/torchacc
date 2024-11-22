@@ -8,6 +8,7 @@ import torch
 import torch.distributed as dist
 
 import torchacc as ta
+from torchacc.utils.import_utils import is_torch_xla_available
 
 if sys.version_info >= (3, 10):
     dataclass = functools.partial(dataclass, slots=True)
@@ -335,7 +336,8 @@ class Config(BaseConfig):
             by get_mesh().
         dataloader (DataLoaderConfig): Configuration for data loader optimization.
     """
-    backend: str = 'lazy'
+    backend: str = 'lazy' if is_torch_xla_available() else 'eager'
+
     compute: ComputeConfig = field(default_factory=ComputeConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     dist: DistConfig = field(default_factory=DistConfig)
@@ -358,6 +360,10 @@ class Config(BaseConfig):
 
         assert self.backend in ['lazy', 'eager'
                                ], "Config.backend should be 'lazy' or 'eager'"
+
+        if not is_torch_xla_available() and self.backend == 'lazy':
+            raise NotImplementedError(
+                "torchacc's lazy backend requires a torch_xla environment")
 
         self.compute.validate()
         self.memory.validate()
