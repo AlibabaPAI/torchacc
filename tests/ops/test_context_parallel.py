@@ -34,7 +34,7 @@ def setup_env():
 class ContextParallelTest(MultiProcessTestBase):
 
     @skip_if_lt_x_gpu(2)
-    @parametrize("is_cuda", [False. True])
+    @parametrize("is_cuda", [False, True])
     @parametrize("test_varlen", [False, True])
     @parametrize("cp_type", ["ulysses", "ring", "context_parallel_2d"])
     # @parametrize("batch_size", [1, 4])
