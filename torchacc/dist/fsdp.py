@@ -22,7 +22,6 @@ import torchacc.utils.utils as utils
 from torchacc.config import Config
 from torchacc.dist import ParallelModule
 
-
 def split_fsdp_wrap_modules(
         graph_model: fx.GraphModule,
         layer_cls: Set[str],
@@ -260,6 +259,7 @@ class FullyShardedDataParallel(ParallelModule):
         # get the inner fsdp model
         # the model passed in maybe wrapped in any of the three type below:
         # DistributedParallel(FullyShardedDataParallel(torch/torch_xla FullyShardedDataParallel))
+        from torchacc.dist import DistributedParallel
         if isinstance(model, DistributedParallel):
             model = model.model
         if isinstance(model, FullyShardedDataParallel):
@@ -335,6 +335,8 @@ class FullyShardedDataParallel(ParallelModule):
         # get the inner fsdp model
         # the model passed in maybe wrapped in any of the three type below:
         # DistributedParallel(FullyShardedDataParallel(torch/torch_xla FullyShardedDataParallel))
+        from torchacc.dist import DistributedParallel
+
         if isinstance(model, DistributedParallel):
             model = model.model
         if isinstance(model, FullyShardedDataParallel):
@@ -454,6 +456,8 @@ class FullyShardedDataParallel(ParallelModule):
         # get the inner fsdp model
         # the model passed in maybe wrapped in any of the three type below:
         # DistributedParallel(FullyShardedDataParallel(torch/torch_xla FullyShardedDataParallel))
+        from torchacc.dist import DistributedParallel
+
         if isinstance(model, DistributedParallel):
             model = model.model
         if isinstance(model, FullyShardedDataParallel):
