@@ -260,14 +260,13 @@ def recursively_apply(func,
         )
     elif isinstance(data, Mapping):
         return type(data)({
-            k:
-                recursively_apply(
-                    func,
-                    v,
-                    *args,
-                    test_type=test_type,
-                    error_on_other_type=error_on_other_type,
-                    **kwargs) for k, v in data.items()
+            k: recursively_apply(
+                func,
+                v,
+                *args,
+                test_type=test_type,
+                error_on_other_type=error_on_other_type,
+                **kwargs) for k, v in data.items()
         })
     elif test_type(data):
         return func(data, *args, **kwargs)
