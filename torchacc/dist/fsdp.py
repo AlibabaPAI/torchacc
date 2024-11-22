@@ -259,11 +259,11 @@ class FullyShardedDataParallel(ParallelModule):
         """
         # get the inner fsdp model
         # the model passed in maybe wrapped in any of the three type below:
-        # DistributedParallel -> FullyShardedDataParallel -> torch/xla FullyShardedDataParallel
-        if hasattr(model, 'model'):
+        # DistributedParallel(FullyShardedDataParallel(torch/torch_xla FullyShardedDataParallel))
+        if isinstance(model, DistributedParallel):
             model = model.model
-            if hasattr(model, 'model'):
-                model = model.model
+        if isinstance(model, FullyShardedDataParallel):
+            model = model.model
 
         if not isinstance(
                 model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(
@@ -334,11 +334,11 @@ class FullyShardedDataParallel(ParallelModule):
         """
         # get the inner fsdp model
         # the model passed in maybe wrapped in any of the three type below:
-        # DistributedParallel -> FullyShardedDataParallel -> torch/xla FullyShardedDataParallel
-        if hasattr(model, 'model'):
+        # DistributedParallel(FullyShardedDataParallel(torch/torch_xla FullyShardedDataParallel))
+        if isinstance(model, DistributedParallel):
             model = model.model
-            if hasattr(model, 'model'):
-                model = model.model
+        if isinstance(model, FullyShardedDataParallel):
+            model = model.model
 
         if not isinstance(
                 model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(
@@ -453,11 +453,11 @@ class FullyShardedDataParallel(ParallelModule):
         """
         # get the inner fsdp model
         # the model passed in maybe wrapped in any of the three type below:
-        # DistributedParallel -> FullyShardedDataParallel -> torch/xla FullyShardedDataParallel
-        if hasattr(model, 'model'):
+        # DistributedParallel(FullyShardedDataParallel(torch/torch_xla FullyShardedDataParallel))
+        if isinstance(model, DistributedParallel):
             model = model.model
-            if hasattr(model, 'model'):
-                model = model.model
+        if isinstance(model, FullyShardedDataParallel):
+            model = model.model
 
         if not isinstance(
                 model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(
