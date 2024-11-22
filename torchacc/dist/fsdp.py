@@ -213,6 +213,8 @@ class FullyShardedDataParallel(ParallelModule):
                 auto_wrap_policy=auto_wrap_policy,
                 mixed_precision=mixed_precision,
                 device_id=torch.cuda.current_device(),
+                use_orig_params=True,
+                forward_prefetch=True,
                 sync_module_states=config.dist.fsdp.sync_module_states)
         else:
             model = xla_fsdp.XlaFullyShardedDataParallel(

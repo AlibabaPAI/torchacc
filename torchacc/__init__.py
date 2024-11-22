@@ -134,5 +134,4 @@ def _set_env():
 
 patch.patch_fa()
 patch.patch_autocast()
-decompose.replace_decompose()
 _set_env()
