@@ -12,6 +12,8 @@ if is_torch_xla_available():
 
 
 def lazy_device():
+    if not is_torch_xla_available():
+        raise NotImplemented('Lazy device require torch_xla environment')
     device = xm.xla_device()
     xm.set_replication(device, [device])
     return device
