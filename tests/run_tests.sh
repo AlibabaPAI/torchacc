@@ -9,6 +9,7 @@ function test_standalone() {
     torchrun --nproc_per_node=4 standalone/pipeline.py --pp_num 4 --test_skip
     torchrun --nproc_per_node=4 standalone/ta_accelerate.py --gc
     torchrun --nproc_per_node=4 standalone/consolidate_and_reshard_ckpts.py --fsdp_num 4 --ckpt_dir standalone/ckpt --reshard_num 4
+    torchrun --nproc_per_node=4 standalone/eager_fsdp_optim_ckpt.py --backend eager --fsdp_num 4
     # PyTorch DDP
     torchrun --nproc_per_node=4 standalone/ta_accelerate.py --backend eager
     # PyTorch FSDP

@@ -1,7 +1,10 @@
 import einops
 import torch
-import torch_xla
-import torch_xla.distributed.spmd as xs
+
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla
+    import torch_xla.distributed.spmd as xs
 
 
 class FlashAttnVarlenQKVPackedXla(torch.autograd.Function):

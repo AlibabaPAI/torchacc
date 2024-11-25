@@ -1,14 +1,23 @@
 import torch
-import torch_xla.core.xla_model as xm
+import warnings
 
 from .async_loader import AsyncLoader
 
-save = xm.save
-mark_step = xm.mark_step
-send_cpu_data_to_device = xm.send_cpu_data_to_device
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla.core.xla_model as xm
+
+    save = xm.save
+    mark_step = xm.mark_step
+    send_cpu_data_to_device = xm.send_cpu_data_to_device
 
 
 def lazy_device():
+    if not is_torch_xla_available():
+        raise NotImplementedError(
+            "The lazy backend of TorchAcc requires the installation of torch_xla. Please use `config.backend='eager'`"
+            "or follow the instructions in https://torchacc.readthedocs.io/en/stable/install.html to use the recommended Docker image."
+        )
     device = xm.xla_device()
     xm.set_replication(device, [device])
     return device
@@ -19,6 +28,8 @@ def is_lazy_device(device: torch.device):
 
 
 def is_lazy_tensor(tensor: torch.tensor):
+    if not is_torch_xla_available():
+        return False
     return xm.is_xla_tensor(tensor)
 
 
@@ -41,4 +52,9 @@ def sync(wait: bool = False):
         wait (bool): Wait utils the graph execution finished if True. Otherwise, execute the
     computation graph asynchronously.
     """
+    if not is_torch_xla_available():
+        warnings.warn(
+            "Sync is only valid in the lazy backend of TorchAcc and has no effect in eager backend"
+        )
+        return
     mark_step(wait)

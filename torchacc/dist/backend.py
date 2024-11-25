@@ -6,8 +6,13 @@ import warnings
 import torch
 import torch.distributed as dist
 from torch.distributed.distributed_c10d import ProcessGroup, ProcessGroupNCCL
-import torch_xla.core.xla_model as xm
+
 from torchacc.utils.logger import logger
+
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla.core.xla_model as xm
+    import torch_xla.distributed.parallel_loader as pl
 
 _BACKEND_NAME = 'lazy'
 _EAGER_BACKEND_NAME = 'nccl'

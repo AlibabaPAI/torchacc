@@ -1,18 +1,29 @@
+import copy
 import functools
+from enum import Enum, auto
 from types import MethodType
-from typing import Dict, Optional, Set
+from typing import Any, Dict, Optional, Set
 
 import torch
 import torch.distributed.fsdp as torch_fsdp
 import torch.fx as fx
+from torch.distributed.fsdp import (FullOptimStateDictConfig,
+                                    FullStateDictConfig)
+from torch.distributed.fsdp import FullyShardedDataParallel as torch_FSDP
+from torch.distributed.fsdp import StateDictType
 from torch.fx.passes.split_module import split_module
-import torch_xla.distributed.fsdp as xla_fsdp
 
-from torchacc.config import Config
-from torchacc.dist import ParallelModule
+import torchacc as ta
+import torchacc.dist.state_dict_utils as state_dict_utils
 import torchacc.utils.checkpoint as checkpoint
 import torchacc.utils.trace as trace
 import torchacc.utils.utils as utils
+from torchacc.config import Config
+from torchacc.dist import ParallelModule
+
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla.distributed.fsdp as xla_fsdp
 
 
 def split_fsdp_wrap_modules(
@@ -228,3 +239,340 @@ class FullyShardedDataParallel(ParallelModule):
 
     def forward(self, *args, **kwargs):
         return self.model(*args, **kwargs)
+
+    @staticmethod
+    def sharded_optim_state_dict(model: torch.nn.Module,
+                                 optim: torch.optim.Optimizer):
+        """
+        Return the optimizer state-dict in its sharded form.
+        
+        Args:
+            model (torch.nn.Module): FSDP model(torchacc or torch fsdp model) whose parameters were 
+            passed into the optimizer ``optim``.
+            optim (torch.optim.Optimizer): Optimizer for model's
+                parameters.
+
+        Returns:
+            lazy backend:
+                Dict[str, Any]: A :class:`dict` containing the sharded optimizer state for
+                fsdp model and shard_meta_data.
+            eager backend:
+                Dict[str, Any]: A :class:`dict` containing the sharded optimizer state for
+                fsdp model.
+        """
+        # get the inner fsdp model
+        # the model passed in maybe wrapped in any of the three type below:
+        # DistributedParallel(FullyShardedDataParallel(torch/torch_xla FullyShardedDataParallel))
+        from torchacc.dist import DistributedParallel
+        if isinstance(model, DistributedParallel):
+            model = model.model
+        if isinstance(model, FullyShardedDataParallel):
+            model = model.model
+
+        if not isinstance(
+                model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(
+                    model, torch_fsdp.FullyShardedDataParallel):
+            raise NotImplementedError(
+                "The model must be xla or torch FSDP model")
+
+        # eager backend, return the sharded state_dict directly.
+        if isinstance(model, torch_fsdp.FullyShardedDataParallel):
+            optim_state = {"optimizer": optim.state_dict()}
+            return optim_state
+
+        # lazy backend
+        optim_state = {
+            "optimizer": optim.state_dict(),
+            "shard_metadata": model.get_shard_metadata(),
+        }
+
+        return optim_state
+
+    @staticmethod
+    def full_optim_state_dict(model: torch.nn.Module,
+                              optim: torch.optim.Optimizer,
+                              **kwargs) -> Dict[str, Any]:
+        """Return the full optimizer state-dict.
+
+        Consolidates the full optimizer state on rank 0 and returns it
+        as a :class:`dict` following the convention of
+        :meth:`torch.optim.Optimizer.state_dict`, i.e. with keys ``"state"``
+        and ``"param_groups"``. The flattened parameters in ``FSDP`` modules
+        contained in model are mapped back to their unflattened parameters.
+
+        .. warning:: This needs to be called on all ranks since it uses
+            collective communications. However, if ``rank0_only=True``, then
+            the state dict is only populated on rank 0, and all other ranks
+            return an empty :class:`dict`.
+        
+        Note: This method work for both lazy and eager mode in torchacc. For eager mode,
+        we call the function optim_state_dict() 
+        in pytorch fsdp and set dict_type to FULL_STATE_DICT
+        (https://pytorch.org/docs/2.3/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel.optim_state_dict)
+        The full_state_dict() method in pytorch fsdp does not have the same function semantics 
+        as our method.
+        
+        Args:
+            model (torch.nn.Module): FSDP model(torchacc or torch FSDP model) whose parameters were 
+            passed into the optimizer ``optim``.
+            optim (torch.optim.Optimizer): Optimizer for model 's
+                parameters.
+            
+            kwargs:
+                The args below are specified for torchacc fsdp:
+                    rank0_only (bool): If ``True``, return the populated :class:`dict`
+                    only on rank 0; if ``False``, return it on all ranks. (Default:
+                    ``True``).
+                    cpu_offload(bool): If ``True``, offload the state-dict to cpu. (Default:
+                    ``True``)
+                
+                for args used for torchacc eager mode, please refer to the docs here: 
+                    https://pytorch.org/docs/2.3/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel.optim_state_dict
+
+        Returns:
+            Dict[str, Any]: A :class:`dict` containing the optimizer state for
+            ``model`` 's original unflattened parameters and including keys
+            "state" and "param_groups" following the convention of
+            :meth:`torch.optim.Optimizer.state_dict`. If ``rank0_only=True``,
+            then nonzero ranks return an :class:`dict` with keys but empty value.
+        """
+        # get the inner fsdp model
+        # the model passed in maybe wrapped in any of the three type below:
+        # DistributedParallel(FullyShardedDataParallel(torch/torch_xla FullyShardedDataParallel))
+        from torchacc.dist import DistributedParallel
+
+        if isinstance(model, DistributedParallel):
+            model = model.model
+        if isinstance(model, FullyShardedDataParallel):
+            model = model.model
+
+        if not isinstance(
+                model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(
+                    model, torch_fsdp.FullyShardedDataParallel):
+            raise NotImplementedError(
+                "The model must be xla or torch FSDP model")
+
+        rank0_only = kwargs.get('rank0_only', True)
+        cpu_offload = kwargs.get('cpu_offload', True)
+        # eager backend
+        if isinstance(model, torch_fsdp.FullyShardedDataParallel):
+            group = kwargs.get('group', None)
+
+            torch_FSDP.set_state_dict_type(
+                model,
+                StateDictType.FULL_STATE_DICT,
+                FullStateDictConfig(
+                    rank0_only=rank0_only, offload_to_cpu=cpu_offload),
+                FullOptimStateDictConfig(
+                    rank0_only=rank0_only, offload_to_cpu=cpu_offload),
+            )
+
+            return torch_FSDP.optim_state_dict(model, optim, group=group)
+
+        # lazy backend
+        shard_meta_data = model.get_shard_metadata()
+        sharded_optim_state = optim.state_dict()['state']
+        optim_state_param_groups = optim.state_dict()['param_groups']
+        # unflattened and consolidated state_dict
+        consolidate_optim_state_dict: Dict[str, Any] = {
+            'state': {},
+            'param_groups': {}
+        }
+
+        # param_names(2-dim list), param_shapes(2-dim list), param_numel(2-dim list)
+        layer_name_lists, layer_size_lists, layer_numel_lists, _ = state_dict_utils.get_layer_full_info(
+            shard_meta_data, model.state_dict())
+
+        # transform 2-dim list name to 1-dim list name
+        flatten_name_list = [
+            fn for layer_fn in layer_name_lists for fn in layer_fn
+        ]
+        # (rank0_only and self.model.rank == 0) or (not rank0_only)
+        if not rank0_only or model.rank == 0:
+            consolidate_optim_state_dict['param_groups'] = copy.deepcopy(
+                optim_state_param_groups)
+            consolidate_optim_state_dict['param_groups'][0]['params'].clear()
+            for fn in flatten_name_list:
+                consolidate_optim_state_dict['param_groups'][0][
+                    'params'].append(fn)
+
+        unflat_state_dict = {fn: {} for fn in flatten_name_list}
+
+        for idx, layer_state in enumerate(sharded_optim_state.values()):
+            layer_names = layer_name_lists[idx]
+            layer_shapes = layer_size_lists[idx]
+            layer_numels = layer_numel_lists[idx]
+            for state_name, state_params in layer_state.items():
+                tensor_buffer = state_dict_utils.all_gather_state(
+                    state_params, model.sharding_groups, model.all_gather_op)
+                tensor_buffer = state_dict_utils.unpad(
+                    tensor_buffer, layer_numels,
+                    model.world_size * model._shard_size_multiple)
+                orig_params = state_dict_utils.unflatten_params(
+                    tensor_buffer, layer_names, layer_shapes, layer_numels)
+
+                if not rank0_only or model.rank == 0:
+                    for fn, fp in zip(layer_names, orig_params):
+                        if cpu_offload:
+                            ta.sync()  # tensor evaluation
+                            unflat_state_dict[fn][state_name] = fp.cpu()
+                        else:
+                            unflat_state_dict[fn][state_name] = fp
+                ta.sync()
+        consolidate_optim_state_dict['state'] = unflat_state_dict
+
+        return consolidate_optim_state_dict
+
+    @staticmethod
+    def optim_state_dict_to_load(model: torch.nn.Module,
+                                 optim: torch.optim.Optimizer,
+                                 optim_state_dict: Dict[str, Any],
+                                 **kwargs) -> Dict[str, Any]:
+        """
+        Convert an optimizer state-dict so that it can be loaded into the
+        optimizer associated with the FSDP model.
+        We check whether the optim_state_dict is sharded automatically.
+        For sharded optim_state_dict, the rank0_only must be False, and we return
+        the sharded optim_state_dict directly.
+        
+        Note: This method work for both lazy and eager mode in torchacc. For eager mode,
+        we call the function optim_state_dict_to_load() 
+        in pytorch fsdp and set dict_type to FULL_STATE_DICT
+        (https://pytorch.org/docs/2.3/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel.optim_state_dict_to_load)
+        
+        Args:
+            model (torch.nn.Module): FSDP model(torchacc or torch FSDP model) whose parameters were 
+            passed into the optimizer whose state_dict is ``optim_state_dict``.
+            optim (torch.optim.Optimizer): Optimizer for model 's parameters.
+            optim_state_dict (Dict[str, Any]): The optimizer states to be loaded.
+            kwargs:
+                The args below are specified for torchacc fsdp:
+                rank0_only: (bool): control whether load state_dict only from
+                    rank0 at the begining.(Default: ``True``). If set to True,
+                    nonzero ranks should pass optim_state_dict as None in.
+                
+                for args used for torchacc eager mode, please refer to the docs here: 
+                    https://pytorch.org/docs/2.3/fsdp.html#torch.distributed.fsdp.FullyShardedDataParallel.optim_state_dict_to_load
+        Returns:
+            Dict[str, Any]: A :class:`dict` containing the optimizer state for
+            model which is sharded for each rank.
+        """
+        # get the inner fsdp model
+        # the model passed in maybe wrapped in any of the three type below:
+        # DistributedParallel(FullyShardedDataParallel(torch/torch_xla FullyShardedDataParallel))
+        from torchacc.dist import DistributedParallel
+
+        if isinstance(model, DistributedParallel):
+            model = model.model
+        if isinstance(model, FullyShardedDataParallel):
+            model = model.model
+
+        if not isinstance(
+                model, xla_fsdp.XlaFullyShardedDataParallel) and not isinstance(
+                    model, torch_fsdp.FullyShardedDataParallel):
+            raise NotImplementedError(
+                "The model must be torchacc or torch FSDP model")
+
+        rank0_only = kwargs.get('rank0_only', True)
+        # eager backend
+        if isinstance(model, torch_fsdp.FullyShardedDataParallel):
+            # sharded optimizer, return directly
+            if 'optimizer' in optim_state_dict.keys():
+                return optim_state_dict['optimizer']
+
+            is_named_optimizer = kwargs.get('is_named_optimizer', False)
+            load_directly = kwargs.get('load_directly', False)
+            group = kwargs.get('group', None)
+
+            # only support for full load.
+            torch_FSDP.set_state_dict_type(
+                model,
+                StateDictType.FULL_STATE_DICT,
+                FullStateDictConfig(rank0_only=rank0_only),
+                FullOptimStateDictConfig(rank0_only=rank0_only),
+            )
+            return torch_FSDP.optim_state_dict_to_load(
+                model,
+                optim,
+                optim_state_dict,
+                is_named_optimizer=is_named_optimizer,
+                load_directly=load_directly,
+                group=group)
+
+        # lazy backend
+        shard_meta_data = model.get_shard_metadata()
+        if optim_state_dict is None:
+            if not rank0_only or model.rank == 0:
+                raise ValueError('optim_state_dict cannot be None')
+            assert rank0_only and model.rank != 0
+
+        # for shard optim_state_dict, we return directly
+        if optim_state_dict is not None and 'shard_metadata' in optim_state_dict.keys(
+        ):
+            if rank0_only is True:
+                raise NotImplementedError(
+                    "we only support rank0_only = False for loading shard optim_state_dict."
+                )
+            assert rank0_only is False
+
+            # the world size should not change
+            if shard_meta_data['world_size'] != optim_state_dict[
+                    'shard_metadata']['world_size']:
+                raise NotImplementedError(
+                    "the sharded_optim_state_dict is loaded with world_size: "
+                    f"{shard_meta_data['world_size']} but stored with: "
+                    f"{optim_state_dict['shard_metadata']['world_size']}!")
+            assert shard_meta_data['world_size'] == optim_state_dict[
+                'shard_metadata']['world_size']
+            return optim_state_dict['optimizer']
+
+        unflat_optim_state = optim_state_dict
+        flat_optim_state: Dict[str, Any] = {'state': {}, 'param_groups': {}}
+
+        layer_name_lists, layer_size_lists, layer_numel_lists, _ = state_dict_utils.get_layer_full_info(
+            shard_meta_data, model.state_dict())
+
+        if rank0_only:
+            unflat_optim_state = state_dict_utils.broadcast_processed_state(
+                unflat_optim_state, model.rank, model.sharding_groups)
+        unflat_state = unflat_optim_state['state']
+
+        flat_optim_state['param_groups'] = copy.deepcopy(
+            unflat_optim_state['param_groups'])
+
+        for idx, layer_names in enumerate(layer_name_lists):
+            flat_value: Dict[str, Any] = {}
+            # broadcast tensor to other ranks per layer per state
+            for state_name in unflat_state[layer_names[0]].keys():
+                tensor_buffer_list = []
+                # we need the params of a whole layer state to be flatten and shard
+                for name in layer_names:
+                    state_params = unflat_state[name][state_name]
+                    # all ranks have same scalar tensor(step) which has been broadcasted in
+                    # broadcast_processed_state above
+                    if isinstance(state_params,
+                                  torch.Tensor) and state_params.dim() == 0:
+                        flat_value[state_name] = state_params
+                        break
+                    tensor_buffer = unflat_state[name][state_name]
+                    if rank0_only:
+                        tensor_buffer = state_dict_utils.broadcast_state(
+                            state_params, model.xla_device, model.rank,
+                            model.sharding_groups,
+                            model.collective_broadcast_op)
+                    tensor_buffer_list.append(tensor_buffer)
+
+                flat_tensor = state_dict_utils.flatten_tensor_list(
+                    tensor_buffer_list)
+
+                if len(flat_tensor):
+                    flat_value[state_name] = model._get_shard(flat_tensor)
+                ta.sync()
+
+            flat_optim_state['state'][idx] = flat_value
+
+        flat_optim_state['param_groups'][0]['params'] = [
+            i for i in range(0, len(flat_optim_state['state'].keys()))
+        ]
+
+        return flat_optim_state

@@ -1,10 +1,13 @@
 from typing import List, Union
 
 import torch
-import torch_xla
 from torch._dispatch.python import enable_python_dispatcher
 
 import torchacc as ta
+
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla
 
 
 def mark_dynamic(x: torch.Tensor, dims: Union[List[int], int],
