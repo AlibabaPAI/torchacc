@@ -53,7 +53,6 @@ def sync(wait: bool = False):
     computation graph asynchronously.
     """
     if not is_torch_xla_available():
-        #warnings.filterwarnings("once")
         warnings.warn(
             "Sync is only valid in the lazy backend of TorchAcc and has no effect in eager backend"
         )
