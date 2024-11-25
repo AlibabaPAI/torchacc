@@ -64,8 +64,9 @@ def patch_fa():
         from packaging import version
         version_ts = transformers.__version__
         if version.parse(version_ts) >= version.parse("4.42.0"):
-            import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
             from typing import Optional
+
+            import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
 
             def _flash_attention_forward(
                 query_states: torch.Tensor,

@@ -397,6 +397,7 @@ class Config(BaseConfig):
             pp_num=self.dist.pp.size,
             tp_num=self.dist.tp.size,
             fsdp_num=self.dist.fsdp.size,
+            sp_num=self.dist.sp.size,
             topology=self.dist.topology)
         ta.get_global_context().mesh = self._mesh
         return self._mesh
