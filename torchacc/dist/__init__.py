@@ -3,8 +3,6 @@ import os
 import numpy as np
 import torch
 import torch.distributed as dist
-import torch_xla
-import torch_xla.core.xla_model as xm
 
 import torchacc as ta
 
@@ -21,6 +19,11 @@ from .pp import PipelineParallel
 from .distributed_parallel import DistributedParallel
 
 from . import fsdp, pp, tp
+
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla
+    import torch_xla.core.xla_model as xm
 
 BACKEND_NAME = backend._BACKEND_NAME
 EAGER_BACKEND_NAME = backend._EAGER_BACKEND_NAME

@@ -11,7 +11,10 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from torch.utils._pytree import tree_map_only
-import torch_xla.core.xla_model as xm
+
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla.core.xla_model as xm
 
 
 def _numel(shape):

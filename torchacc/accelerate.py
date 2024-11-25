@@ -4,7 +4,6 @@ from typing import Optional, Tuple, Union
 
 import torch
 import torch.distributed as dist
-import torch_xla.core.xla_model as xm
 
 import torchacc as ta
 import torchacc.utils.checkpoint as checkpoint
@@ -16,6 +15,10 @@ try:
     from torchdistx import deferred_init, fake  # type: ignore[import]
 except ImportError:
     _TORCHDISTX_AVAIL = False
+
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla.core.xla_model as xm
 
 
 def _setup_env(config: ta.Config) -> None:
