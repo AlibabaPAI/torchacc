@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# $1: mebench url or local directory
+# $1: mtbench url or local directory
 # $2: local model directory
 # $3: an unique benchmark id
 
