@@ -39,16 +39,11 @@ function get_mtbench {
     fi
     MT_BENCH="$EXTRACTED_DIR"
   elif [ -d "$INPUT" ]; then
-    echo "Listing directory: $INPUT"
     MT_BENCH="$INPUT"
   else
     echo "Invalid input. Provide a valid URL or an existing directory."
-    exit 2
+    exit 1
   fi
-
-  echo "------------"
-  echo $MT_BENCH
-  ls $MT_BENCH
 }
 
 
@@ -65,7 +60,6 @@ function install_requirements {
 }
 
 function run_bench {
-  echo
   SCRIPT_DIR="$MT_BENCH"/FastChat/fastchat/llm_judge/
   if [[ ! -d "$SCRIPT_DIR" ]]; then
     echo "Directory $SCRIPT_DIR is not exist."
