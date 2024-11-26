@@ -3,12 +3,11 @@ from typing import Dict, Optional, Set
 
 import torch
 import torch.fx as fx
-
 from torch.fx.passes.split_module import split_module
 
+from torchacc.utils.import_utils import is_torch_xla_available
 from torchacc.utils.utils import get_module_class_from_name
 
-from torchacc.utils.import_utils import is_torch_xla_available
 if is_torch_xla_available():
     import torch_xla
     import torch_xla.distributed.fsdp.wrap as xla_wrap

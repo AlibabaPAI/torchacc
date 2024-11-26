@@ -6,6 +6,7 @@ from collections import namedtuple
 from itertools import product as cartesian_product
 
 import torch.distributed as dist
+
 import torchacc as ta
 
 
@@ -226,7 +227,13 @@ class Mesh:
     corresponding to each of the parallel strategies.
     """
 
-    def __init__(self, dp_num=1, pp_num=1, tp_num=1, fsdp_num=1, topology=None):
+    def __init__(self,
+                 dp_num=1,
+                 pp_num=1,
+                 tp_num=1,
+                 fsdp_num=1,
+                 sp_num=1,
+                 topology=None):
         self.global_rank = ta.dist.rank()
         self.world_size = ta.dist.world_size()
 
@@ -247,7 +254,7 @@ class Mesh:
                     dims.append(fsdp_num)
                 else:
                     raise ValueError(
-                        f"Expect 'dp', 'pp', 'tp' or 'fsdp' in topology, but got {axis}"
+                        f"Expect 'dp', 'pp', 'tp' 'fsdp' or 'sp' in topology, but got {axis}"
                     )
             for p in default_topo:
                 if p not in topology:
@@ -261,6 +268,7 @@ class Mesh:
         self.pp_num = pp_num
         self.tp_num = tp_num
         self.fsdp_num = fsdp_num
+        self.sp_num = sp_num
 
         # Create new ProcessGroup for data collectives - these are the data parallel groups
         self.dp_group = None
@@ -403,3 +411,8 @@ class Mesh:
     def get_fsdp_rank_groups(self):
         """ A list of list, the groups of ranks within the same fsdp. """
         return self.fsdp_groups
+
+    # SP
+    def get_sp_num(self):
+        """ The number of sp. """
+        return self.sp_num

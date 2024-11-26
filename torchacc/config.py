@@ -1,4 +1,5 @@
 import functools
+import os
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -8,6 +9,7 @@ import torch
 import torch.distributed as dist
 
 import torchacc as ta
+import torchacc.ops.context_parallel as context_parallel
 from torchacc.utils.import_utils import is_torch_xla_available
 
 if sys.version_info >= (3, 10):
@@ -268,6 +270,15 @@ class FSDPConfig(BaseConfig):
                 str), "cls in FSDPConfig.wrap_layer_cls should be of str type"
 
 
+class SPConfig(BaseConfig):
+    """Configuration for 
+    """
+    size: int = 1
+
+    def validate(self):
+        assert isinstance(self.size, int), "SPConfig.size should be of int type"
+
+
 @dataclass
 class DistConfig(BaseConfig):
     """Configuration for distributed parallel
@@ -287,6 +298,7 @@ class DistConfig(BaseConfig):
     tp: TPConfig = field(default_factory=TPConfig)
     pp: PPConfig = field(default_factory=PPConfig)
     fsdp: FSDPConfig = field(default_factory=FSDPConfig)
+    sp: SPConfig = field(default_factory=SPConfig)
     topology: List[str] = field(
         default_factory=lambda: ['dp', 'fsdp', 'pp', 'tp'])
 
@@ -300,6 +312,8 @@ class DistConfig(BaseConfig):
         assert isinstance(
             self.fsdp,
             FSDPConfig), "DistConfig.fsdp should be of FSDPConfig type"
+        assert isinstance(self.sp,
+                          SPConfig), "DistConfig.sp should be of SPConfig type"
         assert isinstance(self.topology,
                           list), "DistConfig.topology should be of list type"
 
@@ -316,7 +330,7 @@ class DistConfig(BaseConfig):
         assert len(self.topology) == len(set(self.topology)), "There should not be duplicate elements in " \
             "DistConfig.topology"
         for t in self.topology:
-            if t not in ['dp', 'fsdp', 'pp', 'tp']:
+            if t not in ['dp', 'fsdp', 'pp', 'tp', 'sp']:
                 raise ValueError(
                     f"Expect 'dp', 'pp', 'tp' or 'fsdp' in DistConfig.topology, but got {t}"
                 )
@@ -379,12 +393,21 @@ class Config(BaseConfig):
         if hasattr(self, "_mesh"):
             return self._mesh
         self.validate()
-        ta.dist.init_process_group(self)
+        if dist.is_initialized():
+            assert dist.get_backend() == ta.dist.BACKEND_NAME, "The backend for initializing the distributed" \
+                f" process group should be {ta.dist.BACKEND_NAME}."
+        else:
+            dist.init_process_group(backend=ta.dist.BACKEND_NAME)
+            dist.barrier()
+        if self.dist.sp.size > 1 and os.getenv('XLA_USE_SPMD', '0') == '0':
+            context_parallel.initialize_context_parallel(self.dist.sp.size)
+
         self._mesh = ta.dist.Mesh(
             dp_num=self.dist.dp.size,
             pp_num=self.dist.pp.size,
             tp_num=self.dist.tp.size,
             fsdp_num=self.dist.fsdp.size,
+            sp_num=self.dist.sp.size,
             topology=self.dist.topology)
         ta.get_global_context().mesh = self._mesh
         return self._mesh
@@ -399,6 +422,8 @@ class Config(BaseConfig):
         if self.dist.pp.size > 1:
             return True
         if self.dist.fsdp.size > 1:
+            return True
+        if self.dist.sp.size > 1:
             return True
         return False
 

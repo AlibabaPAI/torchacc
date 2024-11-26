@@ -5,9 +5,9 @@ import torch
 
 import torchacc.ops as ops
 from torchacc.core import amp
+from torchacc.utils.import_utils import is_torch_xla_available
 from torchacc.utils.logger import logger
 
-from torchacc.utils.import_utils import is_torch_xla_available
 if is_torch_xla_available():
     from torch_xla.amp import syncfree
 
@@ -68,8 +68,9 @@ def patch_fa():
         from packaging import version
         version_ts = transformers.__version__
         if version.parse(version_ts) >= version.parse("4.43.0"):
-            import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
             from typing import Optional
+
+            import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
 
             def _flash_attention_forward(
                 query_states: torch.Tensor,
@@ -152,9 +153,11 @@ def patch_qwen(use_flash_attn):
     and replace flash_attn with the interface in torchacc. This requires transformers>=4.41.0.
     '''
     import inspect
+
     import transformers
-    from .logger import logger
     from packaging import version
+
+    from .logger import logger
 
     if use_flash_attn:
         from transformers.cache_utils import Cache
@@ -176,8 +179,9 @@ def patch_qwen(use_flash_attn):
 
     if version.parse(transformers.__version__) >= version.parse("4.37.0"):
         try:
-            import transformers.models.qwen2.modeling_qwen2 as qwen2
             import re
+
+            import transformers.models.qwen2.modeling_qwen2 as qwen2
 
             src = inspect.getsource(qwen2.Qwen2FlashAttention2)
 

@@ -4,9 +4,9 @@ import torch
 import torch.nn.functional as F
 import torch.utils._pytree as pytree
 
+from torchacc.utils.import_utils import is_torch_xla_available
 from torchacc.utils.logger import logger
 
-from torchacc.utils.import_utils import is_torch_xla_available
 if is_torch_xla_available():
     import torch_xla.distributed.parallel_loader as pl
 

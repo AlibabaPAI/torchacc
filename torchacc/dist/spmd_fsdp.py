@@ -72,11 +72,12 @@ class SpmdFullyShardedDataParallel(ParallelModule):
                     gc_cnt -= 1
                 return FSDPv2(m, *args, **kwargs)
 
-        mesh = self._get_mesh((self.mesh.get_fsdp_num(), 1), None,
-                              ('fsdp', 'tensor'))
+        mesh = self._get_mesh(
+            (self.mesh.get_fsdp_num(), self.mesh.get_tp_num()), None,
+            ('fsdp', 'tensor'))
         model = FSDPv2(
             model,
-            mesh,
+            mesh=mesh,
             shard_output=self.shard_output_callable,
             compute_dtype=dtype,
             auto_wrap_policy=auto_wrap_policy,

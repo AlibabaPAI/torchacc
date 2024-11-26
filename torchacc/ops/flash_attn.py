@@ -2,6 +2,7 @@ import einops
 import torch
 
 from torchacc.utils.import_utils import is_torch_xla_available
+
 if is_torch_xla_available():
     import torch_xla
     import torch_xla.distributed.spmd as xs
@@ -105,7 +106,7 @@ class SPMDFlashAttnVarlenXla(torch.autograd.Function):
         q, k, v = [maybe_contiguous(x) for x in (q, k, v)]
 
         with torch.no_grad():
-            softmax_lse, out, rng_state, cu_seqlens_q, cu_seqlens_k = torch_xla._XLAC._flash_attention_forward(
+            softmax_lse, out, rng_state = torch_xla._XLAC._flash_attention_forward(
                 q, k, v, attention_mask, alibi_slopes, dropout_p, softmax_scale,
                 False, causal, window_size[0], window_size[1], return_softmax,
                 None)
@@ -117,7 +118,8 @@ class SPMDFlashAttnVarlenXla(torch.autograd.Function):
         out = out.to(q.dtype)
 
         ctx.save_for_backward(full_q, full_k, full_v, out, softmax_lse,
-                              cu_seqlens_q, cu_seqlens_k, rng_state)
+                              rng_state)
+
         ctx.dropout_p = dropout_p
         ctx.softmax_scale = softmax_scale
         ctx.causal = causal
@@ -128,7 +130,7 @@ class SPMDFlashAttnVarlenXla(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, dout, *args):
-        q, k, v, out, softmax_lse, cu_seqlens_q, cu_seqlens_k, rng_state = ctx.saved_tensors
+        q, k, v, out, softmax_lse, rng_state = ctx.saved_tensors
 
         partition_spec = ctx.partition_spec
         mesh = ctx.mesh
@@ -148,10 +150,10 @@ class SPMDFlashAttnVarlenXla(torch.autograd.Function):
         maybe_contiguous = lambda x: x.contiguous() if x.stride(-1) != 1 else x
         dout, q, k, v, out = [maybe_contiguous(x) for x in (dout, q, k, v, out)]
         dq, dk, dv, softmax_d = torch_xla._XLAC._flash_attention_backward(
-            dout, q, k, v, out, softmax_lse, cu_seqlens_q, cu_seqlens_k,
-            ctx.alibi_slopes, ctx.dropout_p, ctx.softmax_scale, False,
-            ctx.causal, ctx.window_size[0], ctx.window_size[1],
-            ctx.deterministic, None, rng_state)
+            dout, q, k, v, out, softmax_lse, None, None, ctx.alibi_slopes,
+            ctx.dropout_p, ctx.softmax_scale, False, ctx.causal,
+            ctx.window_size[0], ctx.window_size[1], ctx.deterministic, None,
+            rng_state)
 
         if partition_spec is not None:
             dq = xs.disable_manual_sharding(

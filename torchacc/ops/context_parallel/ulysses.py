@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Callable, Optional
 
 import torch
 import torch.distributed as dist
@@ -19,6 +19,8 @@ def ulysses(
     alibi_slopes: Optional[tuple] = None,
     deterministic: bool = False,
     process_group: Optional[dist.ProcessGroup] = None,
+    position_ids=None,
+    rope_func: Callable = None,
 ) -> torch.Tensor:
     """Implementation of DeepSpeed-Ulysses.
 
@@ -53,6 +55,9 @@ def ulysses(
     q = diff_all_to_all(q, scatter_dim=2, gather_dim=1, group=process_group)
     k = diff_all_to_all(k, scatter_dim=2, gather_dim=1, group=process_group)
     v = diff_all_to_all(v, scatter_dim=2, gather_dim=1, group=process_group)
+
+    if rope_func is not None:
+        q, k, v = rope_func(q, k, v)
 
     out = flash_attention(
         q,
