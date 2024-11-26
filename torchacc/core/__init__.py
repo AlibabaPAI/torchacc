@@ -1,9 +1,11 @@
-import torch
 import warnings
+
+import torch
+
+from torchacc.utils.import_utils import is_torch_xla_available
 
 from .async_loader import AsyncLoader
 
-from torchacc.utils.import_utils import is_torch_xla_available
 if is_torch_xla_available():
     import torch_xla.core.xla_model as xm
 

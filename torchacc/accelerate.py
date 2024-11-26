@@ -17,6 +17,7 @@ except ImportError:
     _TORCHDISTX_AVAIL = False
 
 from torchacc.utils.import_utils import is_torch_xla_available
+
 if is_torch_xla_available():
     import torch_xla.core.xla_model as xm
 

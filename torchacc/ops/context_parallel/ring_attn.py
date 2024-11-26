@@ -6,20 +6,18 @@ from typing import Optional
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
+import torch_xla
 from flash_attn.flash_attn_interface import (_flash_attn_varlen_backward,
                                              _flash_attn_varlen_forward)
-import torch_xla
 
 import torchacc as ta
+from torchacc.utils.import_utils import is_torch_xla_available
 
 from .utils import (RingComm, flatten_varlen_lse, unflatten_varlen_lse,
                     update_out_and_lse)
-from torchacc.utils.import_utils import is_torch_xla_available
+
 if is_torch_xla_available():
     import torch_xla
-
-# from flash_attn.flash_attn_interface import (_flash_attn_varlen_backward,
-#                                              _flash_attn_varlen_forward)
 
 
 def ring_flash_attn_varlen_forward(

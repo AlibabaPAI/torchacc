@@ -2,6 +2,7 @@ import einops
 import torch
 
 from torchacc.utils.import_utils import is_torch_xla_available
+
 if is_torch_xla_available():
     import torch_xla
     import torch_xla.distributed.spmd as xs

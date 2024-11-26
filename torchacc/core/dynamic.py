@@ -4,8 +4,8 @@ import torch
 from torch._dispatch.python import enable_python_dispatcher
 
 import torchacc as ta
-
 from torchacc.utils.import_utils import is_torch_xla_available
+
 if is_torch_xla_available():
     import torch_xla
 
