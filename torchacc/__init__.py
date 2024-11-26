@@ -118,6 +118,13 @@ def _set_env():
         "--xla_gpu_enable_reduce_scatter_combine_by_dim":
             "false"
     }
+    from datetime import datetime
+    if "--xla_dump_to" in xla_flags:
+        xla_dump_to = xla_flags.split("--xla_dump_to=")[-1].split(" ")[0]
+        xla_flags = xla_flags.replace(xla_dump_to, "")
+        current_time = datetime.now().strftime("%y%m%d%H%M")
+        xla_flags += f' --xla_dump_to={xla_dump_to}-{current_time}'
+
     for flag, value in default_flags.items():
         if flag not in xla_flags:
             xla_flags += f" {flag}={value}"

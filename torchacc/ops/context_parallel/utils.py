@@ -3,10 +3,11 @@ from typing import Optional, Tuple
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
-from flash_attn import flash_attn_func, flash_attn_varlen_func
 
 import torchacc as ta
-from torchacc.ops import flash_attn_xla, flash_attn_varlen_xla
+from torchacc.ops import flash_attn_varlen_xla, flash_attn_xla
+
+# from flash_attn import flash_attn_func, flash_attn_varlen_func
 
 
 def unflatten_output(shape, out, cu_seqlens):
