@@ -2,14 +2,12 @@
 # ``deepspeed.runtime.pipe.topology.ProcessTopology`` in
 # https://github.com/microsoft/DeepSpeed/blob/master/deepspeed/runtime/pipe/topology.py
 
-import os
 from collections import namedtuple
 from itertools import product as cartesian_product
 
 import torch.distributed as dist
 
 import torchacc as ta
-import torchacc.ops.context_parallel as context_parallel
 
 
 class ProcessTopology:
@@ -319,10 +317,6 @@ class Mesh:
                 if self.global_rank in ranks:
                     self.fsdp_group = ranks
                     self.fsdp_proc_group = proc_group
-
-        # Create new ProcessGroups for sp collectives - these are sequence parallel groups
-        if self.sp_num > 1 and os.getenv('XLA_USE_SPMD', '0') == '0':
-            context_parallel.initialize_context_parallel(self.sp_num)
 
     def _check_mesh_valid(self):
         ranks = 1
