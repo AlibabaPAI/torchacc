@@ -2,11 +2,14 @@
 # ``deepspeed.runtime.pipe.topology.ProcessTopology`` in
 # https://github.com/microsoft/DeepSpeed/blob/master/deepspeed/runtime/pipe/topology.py
 
+import os
 from collections import namedtuple
 from itertools import product as cartesian_product
 
 import torch.distributed as dist
+
 import torchacc as ta
+import torchacc.ops.context_parallel as context_parallel
 
 
 class ProcessTopology:
@@ -251,8 +254,6 @@ class Mesh:
                     dims.append(tp_num)
                 elif axis == 'fsdp':
                     dims.append(fsdp_num)
-                # elif axis == 'sp':
-                #     dims.append(sp_num)
                 else:
                     raise ValueError(
                         f"Expect 'dp', 'pp', 'tp' 'fsdp' or 'sp' in topology, but got {axis}"
@@ -320,16 +321,8 @@ class Mesh:
                     self.fsdp_proc_group = proc_group
 
         # Create new ProcessGroups for sp collectives - these are sequence parallel groups
-        self.sp_group = None
-        self.sp_proc_group = None
-        self.sp_groups = self._topo.get_axis_comm_lists('sp')
-        if self.sp_num > 1:
-            self._check_mesh_valid()
-            for ranks in self.sp_groups:
-                proc_group = dist.new_group(ranks=ranks)
-                if self.global_rank in ranks:
-                    self.sp_group = ranks
-                    self.sp_proc_group = proc_group
+        if self.sp_num > 1 and os.getenv('XLA_USE_SPMD', '0') == '0':
+            context_parallel.initialize_context_parallel(self.sp_num)
 
     def _check_mesh_valid(self):
         ranks = 1
