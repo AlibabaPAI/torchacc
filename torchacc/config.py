@@ -399,8 +399,8 @@ class Config(BaseConfig):
         else:
             dist.init_process_group(backend=ta.dist.BACKEND_NAME)
             dist.barrier()
-        if self.sp_num > 1 and os.getenv('XLA_USE_SPMD', '0') == '0':
-            context_parallel.initialize_context_parallel(self.sp_num)
+        if self.dist.sp.size > 1 and os.getenv('XLA_USE_SPMD', '0') == '0':
+            context_parallel.initialize_context_parallel(self.dist.sp.size)
 
         self._mesh = ta.dist.Mesh(
             dp_num=self.dist.dp.size,
