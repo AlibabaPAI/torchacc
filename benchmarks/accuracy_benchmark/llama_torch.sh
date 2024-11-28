@@ -16,7 +16,7 @@ JOB_NAME="LLAMA_FSDP_TORCH_GPU${NPROC_PER_NODE}_BS${BS}_SEQLEN${SEQLEN}_BF16"
 FSDP_CONFIG="llama_fsdp_torch.json"
 CLS_TO_WRAP="LlamaDecoderLayer"
 
-# $1: the run_clm.py path
+# $1: the HF transformers dir
 # $2: local model directory
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <the run_clm.py path> <local model dir>"
@@ -28,6 +28,13 @@ MODEL_DIR=$(realpath "$2")
 OUTPUTS_DIR=$(basename "$MODEL_DIR")_torch
 RUN_CLM=$TRANSFORMERS_DIR/examples/pytorch/language-modeling/run_clm.py
 
+# Patch the run_clm.py
+PATCH_FILE=$(realpath ./run_clm.py.torch.patch)
+git config --global --add safe.directory $TRANSFORMERS_DIR
+pushd $TRANSFORMERS_DIR
+git checkout .
+patch -p1 < $PATCH_FILE
+popd
 
 # This is the training config. You can change it as you need.
 cat >"$FSDP_CONFIG" <<EOF
@@ -69,4 +76,4 @@ torchrun --nproc_per_node "$NPROC_PER_NODE" \
     --max_train_samples 100 \
     --"$PRECISION" \
     --fsdp "auto_wrap" \
-    --fsdp_config "$FSDP_CONFIG" 2>&1 | tee ./${JOB_NAME}_${RANK}_${TASK_TAG}.log
+    --fsdp_config "$FSDP_CONFIG"
