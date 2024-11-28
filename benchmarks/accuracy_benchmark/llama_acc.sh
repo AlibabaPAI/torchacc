@@ -1,5 +1,15 @@
 #!/bin/bash
 
+
+# $1: the HF transformers dir
+# $2: local model directory
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <the HF transformers dir> <local model dir>"
+    echo "You must provide exactly 2 parameters."
+    exit 1
+fi
+
+
 export PJRT_DEVICE=CUDA
 export XLA_FLAGS='--xla_gpu_memory_limit_slop_factor=500 --xla_multiheap_size_constraint_per_heap=15032385536'
 export ACCELERATE_USE_FSDP=true
@@ -21,21 +31,16 @@ JOB_NAME="LLAMA_FSDP_TORCHACC_GPU${NPROC_PER_NODE}_BS${BS}_SEQLEN${SEQLEN}_BF16"
 FSDP_CONFIG="llama_fsdp_acc.json"
 CLS_TO_WRAP="LlamaDecoderLayer"
 
-# $1: the run_clm.py path
-# $2: local model directory
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <the HF transformers dir> <local model dir>"
-    echo "You must provide exactly 2 parameters."
-    exit 1
-fi
 TRANSFORMERS_DIR=$(realpath "$1")
 MODEL_DIR=$(realpath "$2")
 OUTPUTS_DIR=$(basename "$MODEL_DIR")_acc
 RUN_CLM=$TRANSFORMERS_DIR/examples/pytorch/language-modeling/run_clm.py
 
 # Patch the run_clm.py
-PATCH_FILE=$(realpath ./run_clm.py.patch)
+PATCH_FILE=$(realpath ./run_clm.py.acc.patch)
+git config --global --add safe.directory $TRANSFORMERS_DIR
 pushd $TRANSFORMERS_DIR
+git checkout .
 patch -p1 < $PATCH_FILE
 popd
 
@@ -87,11 +92,4 @@ torchrun --nproc_per_node "$NPROC_PER_NODE" \
     --max_train_samples 100 \
     --"$PRECISION" \
     --fsdp "auto_wrap" \
-    --fsdp_config "$FSDP_CONFIG" 2>&1 | tee ./${JOB_NAME}_${RANK}_${TASK_TAG}.log
-
-
-# Revert the patch
-pushd $TRANSFORMERS_DIR
-git config --global --add safe.directory $TRANSFORMERS_DIR
-git checkout .
-popd
+    --fsdp_config "$FSDP_CONFIG"
