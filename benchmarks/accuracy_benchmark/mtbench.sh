@@ -2,7 +2,7 @@
 
 # $1: local model directory
 if [ "$#" -ne 1 ]; then
-  echo "Usage: $0 <local_model_dir>"
+  echo "Usage: MIT_SPIDER_TOKEN=*** MIT_SPIDER_URL=*** $0 <local_model_dir>"
   echo "You must provide exactly 1 parameters."
   exit 1
 fi
@@ -23,24 +23,24 @@ NUM_GPUS_TOTAL=1
 JUDGMENT_PARALLEL=4
 export M6_TENANT=M6
 
-function instal_fastchat {
+function install_fastchat {
   if [[ ! -d "FastChat" ]]; then
-    git clone https://github.com/lm-sys/FastChat.git
+    git clone https://github.com/AlibabaPAI/FastChat_TorchAcc.git
   fi
 
-  # if python -c "import fschat" &>/dev/null; then
-  #   echo "All requirements are installed."
-  # else
-  #   echo "Install requirements ..."
-  #   pushd ./FastChat
-  #   pip install -e ".[model_worker,llm_judge]"
-  #   pip install gradio
-  #   popd
-  # fi
+  if python -c "import fschat" &>/dev/null; then
+    echo "All requirements are installed."
+  else
+    echo "Install requirements ..."
+    pushd ./FastChat_TorchAcc
+    pip install -e ".[model_worker,llm_judge]"
+    pip install gradio
+    popd
+  fi
 }
 
 function run_bench {
-  SCRIPT_DIR=./FastChat/fastchat/llm_judge/
+  SCRIPT_DIR=./FastChat_TorchAcc/fastchat/llm_judge/
   if [[ ! -d "$SCRIPT_DIR" ]]; then
     echo "Directory $SCRIPT_DIR is not exist."
     exit 1
@@ -66,5 +66,5 @@ function run_bench {
 
 }
 
-instal_fastchat
+install_fastchat
 run_bench
