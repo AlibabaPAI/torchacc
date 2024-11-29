@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# $1: the HF transformers dir
+# $2: local model directory
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <the HF transformers dir> <local model dir>"
+    echo "You must provide exactly 2 parameters."
+    exit 1
+fi
+
 export USE_TORCH_XLA=0
 
 RANK="${RANK:-0}"
@@ -7,8 +15,8 @@ WORLD_SIZE="${WORLD_SIZE:-1}"
 MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
 MASTER_PORT="${MASTER_PORT:-9010}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
-BS="${BS:-4}"
-SEQLEN="${SEQLEN:-4096}"
+BS="${BS:-2}"
+SEQLEN="${SEQLEN:-1024}"
 TASK_TAG="${TASK_TAG:-0000}"
 
 PRECISION="bf16=true"
@@ -16,13 +24,6 @@ JOB_NAME="LLAMA_FSDP_TORCH_GPU${NPROC_PER_NODE}_BS${BS}_SEQLEN${SEQLEN}_BF16"
 FSDP_CONFIG="llama_fsdp_torch.json"
 CLS_TO_WRAP="LlamaDecoderLayer"
 
-# $1: the HF transformers dir
-# $2: local model directory
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <the run_clm.py path> <local model dir>"
-    echo "You must provide exactly 2 parameters."
-    exit 1
-fi
 TRANSFORMERS_DIR=$(realpath "$1")
 MODEL_DIR=$(realpath "$2")
 OUTPUTS_DIR=$(basename "$MODEL_DIR")_torch
@@ -73,7 +74,7 @@ torchrun --nproc_per_node "$NPROC_PER_NODE" \
     --logging_strategy steps \
     --gradient_checkpointing no \
     --logging_steps 100 \
-    --max_train_samples 100 \
+    --max_train_samples 1000 \
     --"$PRECISION" \
     --fsdp "auto_wrap" \
     --fsdp_config "$FSDP_CONFIG"

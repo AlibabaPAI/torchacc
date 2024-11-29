@@ -1,0 +1,102 @@
+diff --git a/fastchat/llm_judge/common.py b/fastchat/llm_judge/common.py
+index d2640d6..b1a4faf 100644
+--- a/fastchat/llm_judge/common.py
++++ b/fastchat/llm_judge/common.py
+@@ -8,6 +8,7 @@ import glob
+ import json
+ import os
+ import re
++import requests
+ import time
+ from typing import Optional
+ 
+@@ -403,27 +404,59 @@ def play_a_match_pair(match: MatchPair, output_file: str):
+ 
+     return result
+ 
++def mit_spider_openai(model, temperature, max_tokens, messages):
++     MAX_API_RETRY = 3
++     LLM_MIT_RETRY_SLEEP = 5
++     kwargs={}
++     kwargs['model']=model
++     kwargs['temperature']=temperature
++     kwargs['max_tokens']=max_tokens
++     kwargs['messages']=messages
++
++     if not os.environ.get('MIT_SPIDER_TOKEN', None):
++         print("NO MIT_SPIDER_TOKEN FOUND，please set export MIT_SPIDER_TOKEN=<YOUR TOKEN>")
++     if not os.environ.get('MIT_SPIDER_URL', None):
++         print("NO MIT_SPIDER_URL FOUND，please set export MIT_SPIDER_URL=<YOUR URL>")
++     mit_spider_config = {
++         "url": os.environ.get("MIT_SPIDER_URL", None),
++         "header": {
++             "Content-Type": "application/json",
++             "Authorization": f"Bearer {os.environ.get('MIT_SPIDER_TOKEN', None)}"
++         }
++     }
++     tenant = None
++     if kwargs['model'].startswith('gpt-4') and os.environ.get("M6_TENANT", None):
++         tenant = os.environ.get("M6_TENANT")
++     response = None
++     for i in range(MAX_API_RETRY):
++         try:
++             if tenant:
++                 payload = {'tenant': tenant}
++             else:
++                 payload = dict()
++             for k, w in kwargs.items():
++                 payload[f"{k}"] = w
++             response = requests.post(mit_spider_config['url'], json=payload, headers=mit_spider_config['header']).json()
++         except Exception as e:
++             print(response, e)
++             time.sleep(LLM_MIT_RETRY_SLEEP)
++             continue
++         if response['code'] == 200:
++             return response
++         else:
++             time.sleep(LLM_MIT_RETRY_SLEEP)
++             print(response)
++     return None
+ 
+ def chat_completion_openai(model, conv, temperature, max_tokens, api_dict=None):
+-    if api_dict is not None:
+-        openai.api_base = api_dict["api_base"]
+-        openai.api_key = api_dict["api_key"]
+-    output = API_ERROR_OUTPUT
++    messages = conv.to_openai_api_messages()
+     for _ in range(API_MAX_RETRY):
+-        try:
+-            messages = conv.to_openai_api_messages()
+-            response = openai.ChatCompletion.create(
+-                model=model,
+-                messages=messages,
+-                n=1,
+-                temperature=temperature,
+-                max_tokens=max_tokens,
+-            )
+-            output = response["choices"][0]["message"]["content"]
++        output = mit_spider_openai(model, temperature, max_tokens, messages)
++        if output is not None and output['code'] == 200:
+             break
+-        except openai.error.OpenAIError as e:
+-            print(type(e), e)
+-            time.sleep(API_RETRY_SLEEP)
++        print("====catch error:", output, flush=True)
++        time.sleep(API_RETRY_SLEEP)
++    output = output['data']['response']["choices"][0]["message"]["content"]
+ 
+     return output
+ 
+diff --git a/fastchat/llm_judge/gen_judgment.py b/fastchat/llm_judge/gen_judgment.py
+index a1c70b2..861d9b7 100644
+--- a/fastchat/llm_judge/gen_judgment.py
++++ b/fastchat/llm_judge/gen_judgment.py
+@@ -301,7 +301,7 @@ if __name__ == "__main__":
+     # Show match stats and prompt enter to continue
+     print("Stats:")
+     print(json.dumps(match_stat, indent=4))
+-    input("Press Enter to confirm...")
++    #input("Press Enter to confirm...")
+ 
+     # Play matches
+     if args.parallel == 1:
