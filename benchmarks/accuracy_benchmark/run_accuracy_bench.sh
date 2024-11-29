@@ -30,9 +30,6 @@ if ! pip list 2>/dev/null | grep -q "$TRANSFORMERS_DIR"; then
 fi
 popd
 
-##### Get the model #####
-# git clone
-
 ##### Run the torch native job ######
 bash ./llama_torch.sh "$TRANSFORMERS_DIR" "$MODEL_DIR" 2>&1 | tee $TORCH_TRAIN_LOG
 
@@ -40,7 +37,7 @@ bash ./llama_torch.sh "$TRANSFORMERS_DIR" "$MODEL_DIR" 2>&1 | tee $TORCH_TRAIN_L
 bash ./llama_acc.sh "$TRANSFORMERS_DIR" "$MODEL_DIR" 2>&1 | tee $ACC_TRAIN_LOG
 
 ##### Evaluate original job ######
-# bash ./mtbench.sh "$MODEL_DIR" 2>&1 | tee $ORIG_MODEL_EVAL_LOG
+bash ./mtbench.sh "$MODEL_DIR" 2>&1 | tee $ORIG_MODEL_EVAL_LOG
 
 ##### Evaluate Torch job ######
 bash ./mtbench.sh "./$MODEL_NAME_TORCH" 2>&1 | tee $TORCH_MODEL_EVAL_LOG
@@ -49,7 +46,7 @@ bash ./mtbench.sh "./$MODEL_NAME_TORCH" 2>&1 | tee $TORCH_MODEL_EVAL_LOG
 bash ./mtbench.sh "./$MODEL_NAME_ACC" 2>&1 | tee $ACC_MODEL_EVAL_LOG
 
 ##### Collect and compre the result ######
-ORIG_SCORE=$(tail -1 $TORCH_MODEL_EVAL_LOG | awk '{print $NF}')
+ORIG_SCORE=$(tail -1 $ORIG_MODEL_EVAL_LOG | awk '{print $NF}')
 TORCH_SCORE=$(tail -1 $TORCH_MODEL_EVAL_LOG | awk '{print $NF}')
 ACC_SCORE=$(tail -1 $ACC_MODEL_EVAL_LOG | awk '{print $NF}')
 
@@ -62,8 +59,8 @@ CYAN='\033[36m'
 
 # Print colored output
 echo -e "${BLUE}==================== Final Results ====================${RESET}"
-echo -e "${YELLOW}Original Model Score   : ${GREEN}${ORIG_SCORE}${RESET}"
-echo -e "${YELLOW}Torch Model Score      : ${GREEN}${TORCH_SCORE}${RESET}"
-echo -e "${YELLOW}TorchAcc Model Score   : ${GREEN}${ACC_SCORE}${RESET}"
+echo -e "${YELLOW}Original Model Score        : ${GREEN}${ORIG_SCORE}${RESET}"
+echo -e "${YELLOW}Torch Model Score           : ${GREEN}${TORCH_SCORE}${RESET}"
+echo -e "${YELLOW}TorchAcc Model Score        : ${GREEN}${ACC_SCORE}${RESET}"
 echo -e "\n${CYAN}More details can be found in: ${RESET}${RES_FOLDER}"
 echo -e "${BLUE}=======================================================${RESET}"

@@ -20,14 +20,14 @@ WORLD_SIZE="${WORLD_SIZE:-1}"
 MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
 MASTER_PORT="${MASTER_PORT:-9010}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
-BS="${BS:-2}"
-SEQLEN="${SEQLEN:-1024}"
+BS="${BS:-1}"
+SEQLEN="${SEQLEN:-4096}"
 TASK_TAG="${TASK_TAG:-0000}"
 
 PRECISION="bf16=true"
-JOB_NAME="LLAMA_FSDP_TORCHACC_GPU${NPROC_PER_NODE}_BS${BS}_SEQLEN${SEQLEN}_BF16"
-FSDP_CONFIG="llama_fsdp_acc.json"
-CLS_TO_WRAP="LlamaDecoderLayer"
+JOB_NAME="qwen_FSDP_TORCHACC_GPU${NPROC_PER_NODE}_BS${BS}_SEQLEN${SEQLEN}_BF16"
+FSDP_CONFIG="qwen_fsdp_acc.json"
+CLS_TO_WRAP="Qwen2DecoderLayer"
 
 TRANSFORMERS_DIR=$(realpath "$1")
 MODEL_DIR=$(realpath "$2")
@@ -56,7 +56,7 @@ cat >"$FSDP_CONFIG" <<EOF
         "pin_layout_in_collective_ops": false,
         "flatten_parameters": true
     },
-    "xla_fsdp_grad_ckpt": false
+    "xla_fsdp_grad_ckpt": true
 }
 EOF
 
@@ -67,9 +67,9 @@ torchrun --nproc_per_node "$NPROC_PER_NODE" \
     --master_port "$MASTER_PORT" \
     --master_addr "$MASTER_ADDR" \
     "$RUN_CLM" \
-    --num_train_epochs 2 \
-    --dataset_name wikitext \
-    --dataset_config_name wikitext-103-raw-v1 \
+    --num_train_epochs 1 \
+    --dataset_name Salesforce/wikitext \
+    --dataset_config_name wikitext-2-raw-v1 \
     --use_fast_tokenizer false \
     --per_device_train_batch_size "$BS" \
     --per_device_eval_batch_size "$BS" \
@@ -87,7 +87,7 @@ torchrun --nproc_per_node "$NPROC_PER_NODE" \
     --logging_strategy steps \
     --gradient_checkpointing no \
     --logging_steps 100 \
-    --max_train_samples 1000 \
+    --max_train_samples 100 \
     --"$PRECISION" \
     --fsdp "auto_wrap" \
     --fsdp_config "$FSDP_CONFIG"

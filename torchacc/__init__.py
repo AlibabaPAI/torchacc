@@ -136,3 +136,15 @@ patch.patch_fa()
 patch.patch_autocast()
 decompose.replace_decompose()
 _set_env()
+
+import torch
+
+original_init = torch.autocast.__init__
+
+def patched_init(self, device_type: str, *args, **kwargs):
+    if device_type == 'xla':
+        device_type = 'cuda'
+    original_init(self, device_type, *args, **kwargs)
+
+torch.autocast.__init__ = patched_init
+
