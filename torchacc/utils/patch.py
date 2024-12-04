@@ -87,23 +87,37 @@ def patch_fa():
                 softcap: Optional[float] = None,
                 deterministic: bool = None,
             ):
+                use_sliding_windows = (
+                    sliding_window is not None and
+                    key_states.shape[1] > sliding_window)
+                window_size = (sliding_window,
+                               sliding_window) if use_sliding_windows else (-1,
+                                                                            -1)
                 if attention_mask is not None:
                     return ops.flash_attn_varlen_xla(
-                        query_states.contiguous(),
-                        key_states.contiguous(),
-                        value_states.contiguous(),
+                        query_states,
+                        key_states,
+                        value_states,
                         attention_mask=attention_mask.contiguous(),
                         dropout_p=dropout,
-                        softmax_scale=softmax_scale)
+                        softmax_scale=softmax_scale,
+                        causal=is_causal,
+                        window_size=window_size,
+                        deterministic=deterministic)
                 else:
                     return ops.flash_attn_xla(
                         query_states,
                         key_states,
                         value_states,
                         dropout_p=dropout,
-                        softmax_scale=softmax_scale)
+                        softmax_scale=softmax_scale,
+                        causal=is_causal,
+                        window_size=window_size,
+                        deterministic=deterministic)
 
-            modeling_flash_attention_utils._flash_attention_forward = _flash_attention_forward
+            modeling_flash_attention_utils._flash_attention_forward = _patch_functions(
+                modeling_flash_attention_utils._flash_attention_forward,
+                _flash_attention_forward)
         else:
             logger.warn(
                 f'FlashAttention is not successfully patched with transformers version={version_ts},'
