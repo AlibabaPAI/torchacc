@@ -45,6 +45,56 @@ def broadcast_master_param(model: torch.nn.Module, config: ta.Config) -> None:
         xm.broadcast_master_param(model)
     # TODO: support DP+FSDP, DP+PP, etc.
 
+def find_decoder_layers(model: torch.nn.Module) -> list:
+    """
+    遍历模型及其子模型的所有类名，返回名字中包含 'DecoderLayer' 的类名。
+
+    :param model: 输入的 PyTorch 模型
+    :return: 包含 'DecoderLayer' 的类名列表
+    """
+    decoder_layers = set()
+
+    def traverse_module(module: torch.nn.Module):
+        # 获取模块的类名
+        class_name = module.__class__.__name__
+        if 'DecoderLayer' in class_name:
+            decoder_layers.add(class_name)
+            return
+
+        # 递归遍历子模块
+        for child in module.children():
+            traverse_module(child)
+
+    # 从根模块开始遍历
+    traverse_module(model)
+
+    return decoder_layers
+
+def find_modulelist_classes(model: torch.nn.Module) -> list:
+    """
+    遍历模型中的所有 ModuleList，返回这些 ModuleList 中包含的类名。
+
+    :param model: 输入的 PyTorch 模型
+    :return: ModuleList 中包含的类名列表
+    """
+    modulelist_classes = set()
+
+    def traverse_module(module: torch.nn.Module):
+        # 遍历当前模块的所有属性
+        for name, child in module.named_children():
+            if isinstance(child, torch.nn.ModuleList):
+                # 如果是 ModuleList，遍历其中的模块
+                for i, sub_module in enumerate(child):
+                    class_name = sub_module.__class__.__name__
+                    modulelist_classes.add(class_name)
+            else:
+                # 递归遍历子模块
+                traverse_module(child)
+
+    # 从根模块开始遍历
+    traverse_module(model)
+
+    return modulelist_classes
 
 def accelerate(
     model: torch.nn.Module,
@@ -96,8 +146,7 @@ def accelerate(
     if config.compute.acc_scaled_dot_attn:
         torch.nn.functional.scaled_dot_product_attention = ta.ops.scaled_dot_product_attention
 
-    config.compute.disable_kernel_patches = True
-    if not config.compute.disable_kernel_patches and config.is_eager_backend():
+    if not config.compute.disable_kernel_patches and config.is_eager_backend() and not config.use_dynamo:
         ta.ops.apply_liger_kernel()
 
     # replace the optimizer and grad scaler with the syncfree optimizer and the torchacc grad scaler
@@ -113,6 +162,12 @@ def accelerate(
 
     # distributed parallel
     if config.is_distributed_parallel():
+        if "auto" in config.dist.fsdp.wrap_layer_cls:
+            decoder_layers = find_modulelist_classes(model)
+            assert len(decoder_layers) == 1
+            config.dist.fsdp.wrap_layer_cls = decoder_layers
+            if ta.dist.rank() == 0:
+                ta.utils.logger.info(f"Auto wrap decoder layer: {decoder_layers}")
         model = ta.dist.DistributedParallel(
             model, config, orig_forward_sig=orig_forward_sig)
 
@@ -153,21 +208,31 @@ def accelerate(
     if not hasattr(model, "device"):
         model.device = device
 
-    if config.is_eager_backend():
-        torch._dynamo.disallow_in_graph(torch.nn.functional.scaled_dot_product_attention)
+    if config.use_dynamo:
+        try:
+            import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
+            torch.compiler.disable(modeling_flash_attention_utils._flash_attention_forward, recursive=False)
+        except ImportError:
+            pass
+        except AttributeError:
+            pass
+
+    if config.use_dynamo and config.dist.fsdp.size == 1:
         model = torch.compile(model, backend="openxla")
 
-        cuda_device = dist.get_rank() % torch.cuda.device_count() if dist.is_initialized() else 0
-        stream = torch_xla._XLAC._get_stream_for_cuda_device(cuda_device)
-        stream = 1 if stream == 0 else stream
-        assert stream is None or type(stream) is int
-        external_stream = torch.cuda.ExternalStream(stream)
-        torch.cuda.set_stream(external_stream)
+        if config.is_eager_backend():
+            torch._dynamo.disallow_in_graph(torch.nn.functional.scaled_dot_product_attention)
+
+            stream = torch_xla._XLAC._get_stream_for_cuda_device(device)
+            stream = 1 if stream == 0 else stream
+            assert stream is None or type(stream) is int
+            external_stream = torch.cuda.ExternalStream(stream)
+            torch.cuda.set_stream(external_stream)
     
     # if dist.get_rank() == 0:
     #     import logging
-    #     # torch._logging.set_logs(graph_breaks=True, recompiles=True, graph=True)
-    #     # torch._logging.set_logs(all=logging.DEBUG)
-    #     torch._logging.set_logs(dynamo=logging.DEBUG)
+    #     # torch._logging.set_logs(graph_breaks=True, recompiles=True, graph=True, graph_code=True)
+    #     torch._logging.set_logs(all=logging.DEBUG)
+        # torch._logging.set_logs(dynamo=logging.DEBUG)
 
     return (model, dataloader) if dataloader else model

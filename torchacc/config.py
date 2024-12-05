@@ -356,6 +356,7 @@ class Config(BaseConfig):
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     dist: DistConfig = field(default_factory=DistConfig)
     dataloader: DataLoaderConfig = field(default_factory=DataLoaderConfig)
+    use_dynamo: bool = False
 
     def validate(self):
         assert isinstance(self.backend,
