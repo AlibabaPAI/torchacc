@@ -278,6 +278,7 @@ def recursively_apply(func,
     return data
 
 
+@torch.compiler.disable(recursive=False)
 def convert_to_fp32(tensor):
     """
     Recursively converts the elements nested list/tuple/dictionary of tensors in FP16/BF16 precision to FP32.

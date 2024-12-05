@@ -185,12 +185,18 @@ class FullyShardedDataParallel(ParallelModule):
             gc_cnt = config.memory.gc_cnt
 
             def auto_wrapper_callable(m, *args, **kwargs):
+                if config.use_dynamo:
+                    m = torch.compile(m, backend="openxla")
                 nonlocal gc_cnt
                 if gc_cnt is None:
                     m = checkpoint.checkpoint_module(m)
                 elif gc_cnt > 0:
                     m = checkpoint.checkpoint_module(m)
                     gc_cnt -= 1
+                return xla_fsdp.XlaFullyShardedDataParallel(m, *args, **kwargs)
+        elif config.use_dynamo:
+            def auto_wrapper_callable(m, *args, **kwargs):
+                m = torch.compile(m, backend="openxla")
                 return xla_fsdp.XlaFullyShardedDataParallel(m, *args, **kwargs)
 
         if config.is_eager_backend():
