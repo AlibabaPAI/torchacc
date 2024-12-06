@@ -2,8 +2,9 @@
 
 # $1: the HF transformers dir
 # $2: local model directory
+# $3: 0 or 1 to indicate using torchacc or not
 if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <the HF transformers dir> <local model dir>"
+    echo "Usage: $0 <the HF transformers dir> <local model dir> <0 or 1 to indicate using torchacc or not>"
     echo "You must provide exactly 2 parameters."
     exit 1
 fi
