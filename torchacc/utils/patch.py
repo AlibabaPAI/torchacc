@@ -90,14 +90,34 @@ def patch_fa():
                         value_states.contiguous(),
                         attention_mask=attention_mask.contiguous(),
                         dropout_p=dropout,
-                        softmax_scale=softmax_scale)
+                        softmax_scale=softmax_scale,
+                        window_size=(sliding_window, sliding_window)
+                        if sliding_window is not None else (-1, -1),
+                        deterministic=deterministic,
+                        causal=is_causal)
+                elif position_ids is not None:
+                    return ops.flash_attn_varlen_position_ids_xla(
+                        query_states.contiguous(),
+                        key_states.contiguous(),
+                        value_states.contiguous(),
+                        position_ids,
+                        dropout_p=dropout,
+                        softmax_scale=softmax_scale,
+                        window_size=(sliding_window, sliding_window)
+                        if sliding_window is not None else (-1, -1),
+                        deterministic=deterministic,
+                        causal=is_causal)
                 else:
                     return ops.flash_attn_xla(
                         query_states,
                         key_states,
                         value_states,
                         dropout_p=dropout,
-                        softmax_scale=softmax_scale)
+                        softmax_scale=softmax_scale,
+                        window_size=(sliding_window, sliding_window)
+                        if sliding_window is not None else (-1, -1),
+                        deterministic=deterministic,
+                        causal=is_causal)
 
             modeling_flash_attention_utils._flash_attention_forward = _flash_attention_forward
         else:
