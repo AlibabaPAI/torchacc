@@ -222,7 +222,7 @@ def patch_llama(use_flash_attn):
 def patch_qwen(use_flash_attn):
     '''
     Modify the calculation of `rotary_seq_len` in `Qwen2FlashAttention2.forward` to avoid xla graph be executed.
-    Replace `transformers.models.qwen.modeling_qwen2.Qwen2Model._update_causal_mask` with `return None` 
+    Replace `transformers.models.qwen.modeling_qwen2.Qwen2Model._update_causal_mask` with `return None`
     and replace flash_attn with the interface in torchacc. This requires transformers>=4.41.0.
     '''
     import inspect
