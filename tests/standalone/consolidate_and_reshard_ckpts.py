@@ -2,12 +2,15 @@ import argparse
 import os
 
 import torch
-import torch_xla.core.xla_model as xm
 import torchacc as ta
 from torchacc.dist.state_dict_utils import (
     consolidate_and_reshard_fsdp_model_dict,
     consolidate_and_reshard_fsdp_optim_dict, load_checkpoints)
 from utils import EchoDataset, set_seed
+
+from torchacc.utils.import_utils import is_torch_xla_available
+if is_torch_xla_available():
+    import torch_xla.core.xla_model as xm
 
 
 class Net(torch.nn.Module):
