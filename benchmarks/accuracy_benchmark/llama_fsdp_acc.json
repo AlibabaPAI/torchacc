@@ -10,5 +10,5 @@
         "pin_layout_in_collective_ops": false,
         "flatten_parameters": true
     },
-    "xla_fsdp_grad_ckpt": false
+    "xla_fsdp_grad_ckpt": true
 }
