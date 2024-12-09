@@ -3,13 +3,15 @@ from typing import Dict, Optional, Set
 
 import torch
 import torch.fx as fx
-import torch_xla
-import torch_xla.distributed.fsdp.wrap as xla_wrap
 from torch.fx.passes.split_module import split_module
 
+from torchacc.utils.import_utils import is_torch_xla_available
 from torchacc.utils.utils import get_module_class_from_name
 
-checkpoint_module = torch_xla.distributed.fsdp.checkpoint_module
+if is_torch_xla_available():
+    import torch_xla
+    import torch_xla.distributed.fsdp.wrap as xla_wrap
+    checkpoint_module = torch_xla.distributed.fsdp.checkpoint_module
 
 
 def fx_checkpoint(graph_model: fx.GraphModule,

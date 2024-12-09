@@ -2,11 +2,14 @@ import inspect
 from functools import wraps
 
 import torch
-from torch_xla.amp import syncfree
 
 import torchacc.ops as ops
 from torchacc.core import amp
+from torchacc.utils.import_utils import is_torch_xla_available
 from torchacc.utils.logger import logger
+
+if is_torch_xla_available():
+    from torch_xla.amp import syncfree
 
 
 def _patch_functions(fn, newfn):
@@ -64,9 +67,11 @@ def patch_fa():
         import transformers
         from packaging import version
         version_ts = transformers.__version__
-        if version.parse(version_ts) >= version.parse("4.43.0"):
-            import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
+        if version.parse(version_ts) >= version.parse(
+                "4.43.0") and version.parse(version_ts) <= version.parse(
+                    "4.46.3"):
             from typing import Optional
+            import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
 
             def _flash_attention_forward(
                 query_states: torch.Tensor,
@@ -83,23 +88,94 @@ def patch_fa():
                 softcap: Optional[float] = None,
                 deterministic: bool = None,
             ):
+                use_sliding_windows = (
+                    sliding_window is not None and
+                    key_states.shape[1] > sliding_window)
+                window_size = (sliding_window,
+                               sliding_window) if use_sliding_windows else (-1,
+                                                                            -1)
+                # TODO(to TianXing): support position_ids
                 if attention_mask is not None:
                     return ops.flash_attn_varlen_xla(
-                        query_states.contiguous(),
-                        key_states.contiguous(),
-                        value_states.contiguous(),
+                        query_states,
+                        key_states,
+                        value_states,
                         attention_mask=attention_mask.contiguous(),
                         dropout_p=dropout,
-                        softmax_scale=softmax_scale)
+                        softmax_scale=softmax_scale,
+                        causal=is_causal,
+                        window_size=window_size,
+                        deterministic=deterministic)
                 else:
                     return ops.flash_attn_xla(
                         query_states,
                         key_states,
                         value_states,
                         dropout_p=dropout,
-                        softmax_scale=softmax_scale)
+                        softmax_scale=softmax_scale,
+                        causal=is_causal,
+                        window_size=window_size,
+                        deterministic=deterministic)
 
-            modeling_flash_attention_utils._flash_attention_forward = _flash_attention_forward
+            modeling_flash_attention_utils._flash_attention_forward = _patch_functions(
+                modeling_flash_attention_utils._flash_attention_forward,
+                _flash_attention_forward)
+        elif version.parse(version_ts) > version.parse("4.46.3"):
+            from typing import Optional
+
+            import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
+
+            def _flash_attention_forward(
+                query_states: torch.Tensor,
+                key_states: torch.Tensor,
+                value_states: torch.Tensor,
+                attention_mask: torch.Tensor,
+                query_length: int,
+                is_causal: bool,
+                dropout: float = 0.0,
+                position_ids: Optional[torch.Tensor] = None,
+                softmax_scale: Optional[float] = None,
+                sliding_window: Optional[int] = None,
+                use_top_left_mask: bool = False,
+                softcap: Optional[float] = None,
+                deterministic: bool = None,
+                cu_seq_lens_q: Optional[torch.LongTensor] = None,
+                cu_seq_lens_k: Optional[torch.LongTensor] = None,
+                max_length_q: Optional[int] = None,
+                max_length_k: Optional[int] = None,
+            ):
+                use_sliding_windows = (
+                    sliding_window is not None and
+                    key_states.shape[1] > sliding_window)
+                window_size = (sliding_window,
+                               sliding_window) if use_sliding_windows else (-1,
+                                                                            -1)
+                # TODO(to TianXing): support position_ids
+                if attention_mask is not None:
+                    return ops.flash_attn_varlen_xla(
+                        query_states,
+                        key_states,
+                        value_states,
+                        attention_mask=attention_mask.contiguous(),
+                        dropout_p=dropout,
+                        softmax_scale=softmax_scale,
+                        causal=is_causal,
+                        window_size=window_size,
+                        deterministic=deterministic)
+                else:
+                    return ops.flash_attn_xla(
+                        query_states,
+                        key_states,
+                        value_states,
+                        dropout_p=dropout,
+                        softmax_scale=softmax_scale,
+                        causal=is_causal,
+                        window_size=window_size,
+                        deterministic=deterministic)
+
+            modeling_flash_attention_utils._flash_attention_forward = _patch_functions(
+                modeling_flash_attention_utils._flash_attention_forward,
+                _flash_attention_forward)
         else:
             logger.warn(
                 f'FlashAttention is not successfully patched with transformers version={version_ts},'
@@ -150,8 +226,9 @@ def patch_qwen(use_flash_attn):
     '''
     import inspect
     import transformers
-    from .logger import logger
     from packaging import version
+
+    from .logger import logger
 
     if use_flash_attn:
         from transformers.cache_utils import Cache
@@ -173,8 +250,9 @@ def patch_qwen(use_flash_attn):
 
     if version.parse(transformers.__version__) >= version.parse("4.37.0"):
         try:
-            import transformers.models.qwen2.modeling_qwen2 as qwen2
             import re
+
+            import transformers.models.qwen2.modeling_qwen2 as qwen2
 
             src = inspect.getsource(qwen2.Qwen2FlashAttention2)
 

@@ -1,7 +1,11 @@
+from typing import Any, Dict
+
 import torch
 
 from torchacc.config import Config
-from torchacc.dist import ParallelModule, DataParallel, FullyShardedDataParallel, PipelineParallel, SpmdFullyShardedDataParallel
+from torchacc.dist import (DataParallel, FullyShardedDataParallel,
+                           ParallelModule, PipelineParallel,
+                           SpmdFullyShardedDataParallel)
 
 
 class DistributedParallel(ParallelModule):
@@ -77,3 +81,31 @@ class DistributedParallel(ParallelModule):
                 "forward_backward is only supported for pipeline parallel.")
         assert isinstance(self.model, PipelineParallel)
         return self.model.forward_backward(*args, output_fn=output_fn, **kwargs)
+
+    def sharded_optim_state_dict(self, optim: torch.optim.Optimizer):
+        if not self.has_fsdp or self.spmd_fsdp:
+            raise NotImplementedError(
+                "sharded_optim_state_dict is only support for FullyShardedDataParallel"
+            )
+
+        return FullyShardedDataParallel.sharded_optim_state_dict(
+            self.model, optim)
+
+    def full_optim_state_dict(self, optim: torch.optim.Optimizer, **kwargs):
+        if not self.has_fsdp or self.spmd_fsdp:
+            raise NotImplementedError(
+                "full_optim_state_dict is only support for FullyShardedDataParallel"
+            )
+
+        return FullyShardedDataParallel.full_optim_state_dict(
+            self.model, optim, **kwargs)
+
+    def optim_state_dict_to_load(self, optim, optim_state_dict: Dict[str, Any],
+                                 **kwargs):
+        if not self.has_fsdp or self.spmd_fsdp:
+            raise NotImplementedError(
+                "optim_state_dict_to_load is only support for FullyShardedDataParallel"
+            )
+
+        return FullyShardedDataParallel.optim_state_dict_to_load(
+            self.model, optim, optim_state_dict, **kwargs)

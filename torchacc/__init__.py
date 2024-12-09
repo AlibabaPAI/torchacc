@@ -1,23 +1,25 @@
 import os
 from dataclasses import dataclass, field
 
-from torch_xla.amp import syncfree
-
 from . import dist, ops
 from .config import Config
 from .core import (AsyncLoader, amp, fetch_gradients, is_lazy_device,
-                   is_lazy_tensor, lazy_device, mark_step, save,
-                   send_cpu_data_to_device, sync)
+                   is_lazy_tensor, lazy_device, sync)
 from .core.accelerate_hf_trainer import accelerate_hf_trainer
 from .core.dynamic import mark_dynamic
 from .llm.qwen_patch import patch_qwen_model
-from .utils import decompose, patch
+from .utils import decompose, import_utils, patch
 from .version import __version__
 
 from .accelerate import accelerate  # isort: skip
 
 _XLA_COORDINATOR_PORT_OFFSET = 10
 _global_context = None
+
+if import_utils.is_torch_xla_available():
+    from torch_xla.amp import syncfree
+
+    from .core import mark_step, save, send_cpu_data_to_device
 
 
 @dataclass
@@ -117,6 +119,13 @@ def _set_env():
         "--xla_gpu_enable_reduce_scatter_combine_by_dim":
             "false"
     }
+    from datetime import datetime
+    if "--xla_dump_to" in xla_flags:
+        xla_dump_to = xla_flags.split("--xla_dump_to=")[-1].split(" ")[0]
+        xla_flags = xla_flags.replace(xla_dump_to, "")
+        current_time = datetime.now().strftime("%y%m%d%H%M")
+        xla_flags += f' --xla_dump_to={xla_dump_to}-{current_time}'
+
     for flag, value in default_flags.items():
         if flag not in xla_flags:
             xla_flags += f" {flag}={value}"

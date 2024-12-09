@@ -11,9 +11,13 @@ from flash_attn.flash_attn_interface import (_flash_attn_varlen_backward,
                                              _flash_attn_varlen_forward)
 
 import torchacc as ta
+from torchacc.utils.import_utils import is_torch_xla_available
 
 from .utils import (RingComm, flatten_varlen_lse, unflatten_varlen_lse,
                     update_out_and_lse)
+
+if is_torch_xla_available():
+    import torch_xla
 
 
 def ring_flash_attn_varlen_forward(
