@@ -15,9 +15,8 @@ WORLD_SIZE="${WORLD_SIZE:-1}"
 MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
 MASTER_PORT="${MASTER_PORT:-9010}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
-BS="${BS:-2}"
+BATCH_SIZE="${BATCH_SIZE:-2}"
 SEQLEN="${SEQLEN:-1024}"
-TASK_TAG="${TASK_TAG:-0000}"
 PRECISION="bf16=true"
 RUN_CLM=./run_clm.py
 
@@ -33,10 +32,10 @@ elif [ "$USE_TORCHACC" -eq 1 ]; then
   export ACCELERATE_USE_FSDP=true
   export PJRT_USE_TORCH_ALLOCATOR=true
   export LOW_CPU_MEM_USAGE=1
-  export XLA_PERSISTENT_CACHE_PATH=./compiled_cache # uncomment this line to cache the compile results and speed up initialization.
+  export XLA_PERSISTENT_CACHE_PATH=./compiled_cache
+  FSDP_CONFIG="llama_fsdp_acc.json"
   TEMP_OUTPUT_DIR=$(basename "$MODEL_DIR")_acc
   OUTPUTS_DIR=${3:-$TEMP_OUTPUT_DIR}
-  FSDP_CONFIG="llama_fsdp_acc.json"
 else
   echo "The third argument must be 0 or 1"
   exit 1
@@ -53,8 +52,8 @@ torchrun --nproc_per_node "$NPROC_PER_NODE" \
   --dataset_name wikitext \
   --dataset_config_name wikitext-103-raw-v1 \
   --use_fast_tokenizer false \
-  --per_device_train_batch_size "$BS" \
-  --per_device_eval_batch_size "$BS" \
+  --per_device_train_batch_size "$BATCH_SIZE" \
+  --per_device_eval_batch_size "$BATCH_SIZE" \
   --do_train \
   --output_dir "$OUTPUTS_DIR" \
   --overwrite_output_dir \
