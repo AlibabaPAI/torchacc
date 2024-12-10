@@ -15,21 +15,21 @@ class PatchAutocastTest(unittest.TestCase):
     def test_patch_autocast(self):
         device = ta.lazy_device()
 
-        t1 = torch.rand([2,2], device=device)
-        t2 = torch.rand([2,2], device=device)
+        lhs = torch.rand([2, 2], device=device)
+        rhs = torch.rand([2, 2], device=device)
 
-        first, second = self._matmul_with_autocast(t1, t2, 'cuda', 'cuda')
-        assert first.dtype==torch.bfloat16
-        assert second.dtype==torch.float32
+        first, second = self._matmul_with_autocast(lhs, rhs, 'cuda', 'cuda')
+        self.assertEqual(first.dtype, torch.bfloat16)
+        self.assertEqual(second.dtype, torch.float32)
 
-        first, second = self._matmul_with_autocast(t1, t2, 'xla', 'xla')
-        assert first.dtype==torch.bfloat16
-        assert second.dtype==torch.float32
+        first, second = self._matmul_with_autocast(lhs, rhs, 'xla', 'xla')
+        self.assertEqual(first.dtype, torch.bfloat16)
+        self.assertEqual(second.dtype, torch.float32)
 
-        first, second = self._matmul_with_autocast(t1, t2, 'cuda', 'xla')
-        assert first.dtype==torch.bfloat16
-        assert second.dtype==torch.float32
+        first, second = self._matmul_with_autocast(lhs, rhs, 'cuda', 'xla')
+        self.assertEqual(first.dtype, torch.bfloat16)
+        self.assertEqual(second.dtype, torch.float32)
 
-        first, second = self._matmul_with_autocast(t1, t2, 'xla', 'cuda')
-        assert first.dtype==torch.bfloat16
-        assert second.dtype==torch.float32
+        first, second = self._matmul_with_autocast(lhs, rhs, 'xla', 'cuda')
+        self.assertEqual(first.dtype, torch.bfloat16)
+        self.assertEqual(second.dtype, torch.float32)

@@ -1,6 +1,6 @@
 import inspect
-from functools import wraps
 import os
+from functools import wraps
 
 import torch
 
@@ -232,7 +232,6 @@ def patch_qwen(use_flash_attn):
 
     import transformers
     from packaging import version
-
 
     if use_flash_attn:
         from transformers.cache_utils import Cache
