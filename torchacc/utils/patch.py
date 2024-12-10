@@ -1,5 +1,6 @@
 import inspect
 from functools import wraps
+import os
 
 import torch
 
@@ -62,7 +63,9 @@ def patch_fa():
     Replace `transformers.modeling_flash_attention_utils._flash_attention_forward` with
     `torchacc.ops.flash_attn_xla` and `torchacc.ops.flash_attn_varlen_xla`
     '''
-    from .logger import logger
+    if os.getenv('PATCH_FA', '1') not in ['1', 'true', 'True']:
+        return
+
     try:
         import transformers
         from packaging import version
@@ -222,7 +225,7 @@ def patch_llama(use_flash_attn):
 def patch_qwen(use_flash_attn):
     '''
     Modify the calculation of `rotary_seq_len` in `Qwen2FlashAttention2.forward` to avoid xla graph be executed.
-    Replace `transformers.models.qwen.modeling_qwen2.Qwen2Model._update_causal_mask` with `return None` 
+    Replace `transformers.models.qwen.modeling_qwen2.Qwen2Model._update_causal_mask` with `return None`
     and replace flash_attn with the interface in torchacc. This requires transformers>=4.41.0.
     '''
     import inspect
@@ -230,7 +233,6 @@ def patch_qwen(use_flash_attn):
     import transformers
     from packaging import version
 
-    from .logger import logger
 
     if use_flash_attn:
         from transformers.cache_utils import Cache
@@ -275,3 +277,15 @@ def patch_qwen(use_flash_attn):
             exec(src, qwen2.__dict__)
         except Exception as e:
             logger.warning(f"patch qwen2 failed due to: {e}")
+
+
+def patch_autocast():
+    if os.getenv('PATCH_TORCH_AUTOCAST', '1') in ['1', 'true', 'True']:
+        original_init = torch.autocast.__init__
+
+        def patched_init(self, device_type: str, *args, **kwargs):
+            if device_type == 'xla':
+                device_type = 'cuda'
+            original_init(self, device_type, *args, **kwargs)
+
+        torch.autocast.__init__ = patched_init
