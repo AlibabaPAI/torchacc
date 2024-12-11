@@ -1,6 +1,4 @@
 import sys
-import importlib
-
 
 def test_torchacc_without_torch_xla():
     # disable the torch_xla in environment
