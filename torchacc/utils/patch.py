@@ -150,7 +150,6 @@ def patch_fa():
                 window_size = (sliding_window,
                                sliding_window) if use_sliding_windows else (-1,
                                                                             -1)
-                # TODO(to TianXing): support position_ids
                 if attention_mask is not None:
                     return ops.flash_attn_varlen_xla(
                         query_states.contiguous(),
