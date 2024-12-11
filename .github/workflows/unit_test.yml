@@ -38,6 +38,6 @@ jobs:
           pip install -r requirements/requirements-test.txt && \
           git config --global --add safe.directory $PWD && \
           pip install -e . && \
-          bash tests/run_ut.sh'
+          make test'
       env:
         UT_IMAGE: ${{ secrets.UT_IMAGE }}
