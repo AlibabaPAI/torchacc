@@ -63,7 +63,7 @@ def patch_fa():
     Replace `transformers.modeling_flash_attention_utils._flash_attention_forward` with
     `torchacc.ops.flash_attn_xla` and `torchacc.ops.flash_attn_varlen_xla`
     '''
-    if os.getenv('PATCH_FA', '1') not in ['1', 'true', 'True']:
+    if os.getenv('TORCHACC_PATCH_FA', '1') not in ['1', 'true', 'True']:
         return
 
     try:
@@ -279,7 +279,7 @@ def patch_qwen(use_flash_attn):
 
 
 def patch_autocast():
-    if os.getenv('PATCH_TORCH_AUTOCAST', '1') in ['1', 'true', 'True']:
+    if os.getenv('TORCHACC_PATCH_TORCH_AUTOCAST', '1') in ['1', 'true', 'True']:
         original_init = torch.autocast.__init__
 
         def patched_init(self, device_type: str, *args, **kwargs):

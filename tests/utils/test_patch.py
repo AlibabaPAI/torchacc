@@ -1,14 +1,16 @@
 import unittest
+
 import torch
+
 import torchacc as ta
 
 
 class PatchAutocastTest(unittest.TestCase):
 
-    def _matmul_with_autocast(self, lhs, rhs, first_dtype, second_dtype):
-        with torch.autocast(device_type=first_dtype, dtype=torch.bfloat16):
+    def _matmul_with_autocast(self, lhs, rhs, first_device, second_device):
+        with torch.autocast(device_type=first_device, dtype=torch.bfloat16):
             first = torch.matmul(lhs, rhs)
-            with torch.autocast(device_type=second_dtype, enabled=False):
+            with torch.autocast(device_type=second_device, enabled=False):
                 second = torch.matmul(lhs, rhs)
         return (first, second)
 
