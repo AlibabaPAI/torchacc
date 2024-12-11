@@ -6,7 +6,6 @@ from typing import Optional
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
-import torch_xla
 from flash_attn.flash_attn_interface import (_flash_attn_varlen_backward,
                                              _flash_attn_varlen_forward)
 
