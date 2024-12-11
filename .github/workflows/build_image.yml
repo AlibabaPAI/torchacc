@@ -7,14 +7,14 @@ on:
     - cron: '0 17 * * *' # This is UTC time
 
 jobs:
-  build_image:
+  run-shell-script:
     runs-on: self-hosted
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Build the docker image
+    - name: Run shell script
       run: cd docker && bash ./build_docker.sh
       env:
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
