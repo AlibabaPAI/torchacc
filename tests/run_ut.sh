@@ -11,6 +11,7 @@ function test_unittests() {
     pytest tests/distributed/test_fsdp_optim_state.py
     pytest tests/ops/test_flash_attn.py
     pytest tests/ops/test_context_parallel.py
+    pytest tests/import/test_without_torch_xla.py
 }
 
 test_unittests
