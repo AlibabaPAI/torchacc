@@ -297,7 +297,7 @@ class FlashAttnXla(torch.autograd.Function):
         maybe_contiguous = lambda x: x.contiguous() if x.stride(-1) != 1 else x
         dout, q, k, v, out = [maybe_contiguous(x) for x in (dout, q, k, v, out)]
 
-        dq, dk, dv, softmax_d = torch_xla._XLAC._flash_attention_backward(
+        dq, dk, dv, softmax_d = torch.ops.torchacc.flash_attention_backward(
             dout, q, k, v, out, softmax_lse, None, None, ctx.alibi_slopes,
             ctx.dropout_p, ctx.softmax_scale, False, ctx.causal,
             ctx.window_size[0], ctx.window_size[1], ctx.deterministic, None,
@@ -601,7 +601,7 @@ def flash_attn_xla(
     )
 
 
-torch.library.define("torchacc::flash_attention_forward", "(Tensor q, Tensor k, Tensor v, Tensor? attention_mask, Tensor cu_q_lens, Tensor cu_k_lens, Tensor? alibi_slopes, int max_seqlen_q, int max_seqlen_k, float p_dropout, float softmax_scale, bool zero_tensors, bool is_causal, int window_size_left, int window_size_right, bool return_softmax, Tensor? gen) -> (Tensor softmax_lse, Tensor out, Tensor rng_state)")
+torch.library.define("torchacc::flash_attention_forward", "(Tensor q, Tensor k, Tensor v, Tensor? attention_mask, Tensor? alibi_slopes, float dropout_p, float softmax_scale, bool zero_tensors, bool causal, int window_size_left, int window_size_right, bool return_softmax, Tensor? gen) -> (Tensor softmax_lse, Tensor out, Tensor rng_state)")
 
 
 @torch.library.impl("torchacc::flash_attention_forward", "default")
