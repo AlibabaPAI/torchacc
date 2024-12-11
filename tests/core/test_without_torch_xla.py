@@ -1,5 +1,6 @@
 import sys
 
+
 def test_torchacc_without_torch_xla():
     # disable the torch_xla in environment
     sys.modules["torch_xla"] = None
