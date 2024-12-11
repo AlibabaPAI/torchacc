@@ -19,9 +19,12 @@ on:
       - 'docs/**'
       - '**.md'
 
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  run-shell-script:
+  unit_test:
     runs-on: self-hosted
 
     steps:
