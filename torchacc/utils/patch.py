@@ -147,6 +147,7 @@ def patch_fa():
                 cu_seq_lens_k: Optional[torch.LongTensor] = None,
                 max_length_q: Optional[int] = None,
                 max_length_k: Optional[int] = None,
+                target_dtype: Optional[torch.dtype] = None,
             ):
                 use_sliding_windows = (
                     sliding_window is not None and
