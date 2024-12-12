@@ -17,6 +17,8 @@ MASTER_PORT="${MASTER_PORT:-9010}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
 BATCH_SIZE="${BATCH_SIZE:-2}"
 SEQLEN="${SEQLEN:-1024}"
+DATASET_NAME="${DATASET_NAME:-'wikitext'}"
+DATASET_CONFIG_NAME="${DATASET_CONFIG_NAME:-'wikitext-102-raw-v1'}"
 PRECISION="bf16=true"
 RUN_CLM=./run_clm.py
 
@@ -49,8 +51,8 @@ torchrun --nproc_per_node "$NPROC_PER_NODE" \
   --master_addr "$MASTER_ADDR" \
   "$RUN_CLM" \
   --num_train_epochs 2 \
-  --dataset_name wikitext \
-  --dataset_config_name wikitext-103-raw-v1 \
+  --dataset_name $DATASET_NAME \
+  --dataset_config_name $DATASET_CONFIG_NAME \
   --use_fast_tokenizer false \
   --per_device_train_batch_size "$BATCH_SIZE" \
   --per_device_eval_batch_size "$BATCH_SIZE" \
