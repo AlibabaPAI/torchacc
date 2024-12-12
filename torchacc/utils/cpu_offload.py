@@ -593,7 +593,11 @@ def get_cpu_offload_context(num_offload_layers: int = 1,
             _applied_tensor = tensor
             return tensor
 
-        return apply_to_tensors(apply, outputs)
+        outputs = apply_to_tensors(apply, outputs)
+        # delete the global variables to avoid memory leak
+        _apply_tensor = None
+        _applied_tensor = None
+        return outputs
 
     return (
         CpuOffloadHookWithOffloadHandler(offload_handler=cpu_offload_handler),
