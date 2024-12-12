@@ -21,7 +21,7 @@ NUM_GPUS_TOTAL=1
 JUDGMENT_PARALLEL=4
 
 function install_fastchat {
-  if [[ ! -d "FastChat" ]]; then
+  if [[ ! -d "FastChat_TorchAcc" ]]; then
     git clone https://github.com/AlibabaPAI/FastChat_TorchAcc.git
   fi
 
@@ -30,7 +30,7 @@ function install_fastchat {
   else
     echo "Install requirements ..."
     pushd ./FastChat_TorchAcc
-    pip install -e ".[model_worker,llm_judge]"
+    pip install --use-pep517 -e ".[model_worker,llm_judge]"
     pip install gradio
     popd
   fi

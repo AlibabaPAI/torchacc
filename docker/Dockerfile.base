@@ -19,6 +19,7 @@ RUN env ${PROXY} apt-get update \
         wget \
         curl \
         git \
+        git-lfs \
         gcc-11 \
         g++-11 \
         libjpeg-dev \
@@ -30,6 +31,7 @@ RUN env ${PROXY} apt-get update \
         ccache \
         python3.10 \
         python3.10-dev \
+        python3.10-lib2to3 \
     && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100 \
     && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100 \
     && update-alternatives --install /usr/bin/python python /usr/bin/python3.10 100 \

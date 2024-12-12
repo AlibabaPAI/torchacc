@@ -1,0 +1,25 @@
+name: Daily Accuracy Benchmark
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs daily at 3:00 AM, Beijing time.
+    - cron: '0 19 * * *' # This is UTC time
+
+jobs:
+  accuracy_benchmark:
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Perform the accuracy benchmark
+      run: cd benchmarks/accuracy && bash ./run.sh
+      env:
+        OSS_AK_ID: ${{ secrets.OSS_AK_ID }}
+        OSS_AK_SECRET: ${{ secrets.OSS_AK_SECRET }}
+        OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
+        M6_TENANT: ${{ secrets.M6_TENANT }}
+        MIT_SPIDER_TOKEN: ${{ secrets.MIT_SPIDER_TOKEN }}
+        MIT_SPIDER_URL: ${{ secrets.MIT_SPIDER_URL }}

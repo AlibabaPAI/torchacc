@@ -1,3 +1,5 @@
+# yapf: disable
+
 #!/usr/bin/env python
 # coding=utf-8
 # Copyright 2020 The HuggingFace Inc. team. All rights reserved.
