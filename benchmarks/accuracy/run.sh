@@ -104,5 +104,5 @@ function collect_and_show_results {
 
 do_train
 do_evaluation
-upload_to_oss
 collect_and_show_results
+upload_to_oss

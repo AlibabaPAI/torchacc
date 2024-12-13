@@ -25,7 +25,8 @@ function install_fastchat {
     git clone https://github.com/AlibabaPAI/FastChat_TorchAcc.git
   fi
 
-  if python -c "import fschat" &>/dev/null; then
+  output=$(python -m pip list | grep fschat)
+  if [[ -n $output ]]; then
     echo "All requirements are installed."
   else
     echo "Install requirements ..."
