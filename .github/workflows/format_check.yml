@@ -1,6 +1,6 @@
 name: Code Formatting Check
 
-on: 
+on:
   pull_request:
   push:
     branches:
@@ -9,7 +9,7 @@ on:
       - r[0-9]+.[0-9]+
 
 jobs:
-  build:
+  format_check:
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v3
