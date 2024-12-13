@@ -97,8 +97,19 @@ def patch_fa():
                 window_size = (sliding_window,
                                sliding_window) if use_sliding_windows else (-1,
                                                                             -1)
-                # TODO(to TianXing): support position_ids
-                if attention_mask is not None:
+                if position_ids is not None:
+                    return ops.flash_attn_varlen_position_ids_xla(
+                        query_states.contiguous(),
+                        key_states.contiguous(),
+                        value_states.contiguous(),
+                        position_ids,
+                        dropout_p=dropout,
+                        softmax_scale=softmax_scale,
+                        window_size=(sliding_window, sliding_window)
+                        if sliding_window is not None else (-1, -1),
+                        deterministic=deterministic,
+                        causal=is_causal)
+                elif attention_mask is not None:
                     return ops.flash_attn_varlen_xla(
                         query_states,
                         key_states,
@@ -154,24 +165,24 @@ def patch_fa():
                 window_size = (sliding_window,
                                sliding_window) if use_sliding_windows else (-1,
                                                                             -1)
-                if attention_mask is not None:
-                    return ops.flash_attn_varlen_xla(
+                if position_ids is not None:
+                    return ops.flash_attn_varlen_position_ids_xla(
                         query_states.contiguous(),
                         key_states.contiguous(),
                         value_states.contiguous(),
-                        attention_mask=attention_mask.contiguous(),
+                        position_ids,
                         dropout_p=dropout,
                         softmax_scale=softmax_scale,
                         window_size=(sliding_window, sliding_window)
                         if sliding_window is not None else (-1, -1),
                         deterministic=deterministic,
                         causal=is_causal)
-                elif position_ids is not None:
-                    return ops.flash_attn_varlen_position_ids_xla(
+                elif attention_mask is not None:
+                    return ops.flash_attn_varlen_xla(
                         query_states.contiguous(),
                         key_states.contiguous(),
                         value_states.contiguous(),
-                        position_ids,
+                        attention_mask=attention_mask.contiguous(),
                         dropout_p=dropout,
                         softmax_scale=softmax_scale,
                         window_size=(sliding_window, sliding_window)
