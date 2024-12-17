@@ -99,9 +99,9 @@ def patch_fa():
                                                                             -1)
                 if position_ids is not None:
                     return ops.flash_attn_varlen_position_ids_xla(
-                        query_states.contiguous(),
-                        key_states.contiguous(),
-                        value_states.contiguous(),
+                        query_states,
+                        key_states,
+                        value_states,
                         position_ids,
                         dropout_p=dropout,
                         softmax_scale=softmax_scale,
@@ -167,9 +167,9 @@ def patch_fa():
                                                                             -1)
                 if position_ids is not None:
                     return ops.flash_attn_varlen_position_ids_xla(
-                        query_states.contiguous(),
-                        key_states.contiguous(),
-                        value_states.contiguous(),
+                        query_states,
+                        key_states,
+                        value_states,
                         position_ids,
                         dropout_p=dropout,
                         softmax_scale=softmax_scale,
