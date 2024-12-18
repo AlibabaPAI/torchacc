@@ -14,7 +14,7 @@ To perform the evaluation, follow these steps:
     bash ./llama.sh <ORIGINAL_MODEL_DIR> 0
     ```
 
-    Run the Torch native job using `run_clm.py`, a script copied from HuggingFace Transformers.
+    Run the Torch native job using `run_clm.py`, a script copied from HuggingFace Transformers. `ORIGINAL_MODEL_DIR` is the path to the original model checkpoint downloaded from HuggingFace or ModelScope. `0` indicates that this training job does not use `torchacc`.
 
 2. Run TorchAcc
 
@@ -22,7 +22,8 @@ To perform the evaluation, follow these steps:
     bash ./llama.sh <ORIGINAL_MODEL_DIR> 1
     ```
 
-    Run the TorchAcc job using the same script as used for Torch native.
+    Run the TorchAcc job using the same script as used for Torch native. `ORIGINAL_MODEL_DIR` is the path to the original model checkpoint downloaded from HuggingFace or ModelScope. `1` indicates that this training job uses `torchacc`.
+
 
 3. Evaluate Original
 
@@ -30,7 +31,7 @@ To perform the evaluation, follow these steps:
     bash ./mtbench.sh <ORIGINAL_MODEL_DIR>
     ```
 
-    Evaluate the original checkpoint using FastChat.
+    Evaluate the original checkpoint using FastChat. `ORIGINAL_MODEL_DIR` is the path to the original model checkpoint downloaded from HuggingFace or ModelScope.
 
 4. Evaluate Outputs
 
@@ -39,7 +40,7 @@ To perform the evaluation, follow these steps:
     bash ./mtbench.sh <TORCHACC_CHECKPOINT>
     ```
 
-    Evaluate the checkpoints output by Torch native job and TorchAcc.
+    Evaluate the checkpoints output by Torch native job and TorchAcc. `TORCH_NATIVE_CHECKPOINT` is the path to the model checkpoint output by torch native job. `TORCHACC_CHECKPOINT` is the path to the model checkpoint output by torchacc job.
 
 5. Compare Results
 
@@ -48,27 +49,37 @@ To perform the evaluation, follow these steps:
 
 You can simply execute the `run.sh` script to perform all the steps.
 
+
 ## Main Files
+
+
+All the files used in the accuracy benchmark are listed below.
 
 * run.sh
 
     The script integrates all the steps.
 
     ```bash
-    bash ./run.sh <local_model_dir>
+    bash ./run.sh [local_model_dir]
     ```
+
+    You could pass the local model checkpoint path to the script. If no local path is specified, it will download `llama-3.2-1B` from ModelScope.
 
 * llama.sh
 
-    The script runs llama job using `run_clm.py` with either Torch native or TorchAcc.
-
     ```bash
+    # Usage: $0 <local_model_dir> <use_torchacc> [checkpiont_output_dir]
+    #  local_model_dir: Path to the local directory where the model will be saved.
+    #  use_torchacc: 0 or 1 to indicate whether to use TorchAcc.
+    #  checkpoint_output_dir: Optional. Default is the model name in <local_model_dir>.
     bash ./llama.sh <local_model_dir> <use_torchacc> [checkpiont_output_dir]
     ```
 
+    The script runs the llama training job using `run_clm.py` with either Torch native or TorchAcc.
+
 * fastchat.sh
 
-    The script runs the evaluation task on your checkpoint.
+    The script runs the evaluation task on your checkpoint. The `ENV_VARIABLES` can be obtained from the maintainers of TorchAcc.
 
     ```bash
     ENV_VARIABLES bash ./fastchat.sh <local_model_dir>
