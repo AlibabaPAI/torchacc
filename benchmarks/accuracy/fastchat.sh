@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 if [ "$#" -ne 1 ]; then
   echo "Usage: MIT_SPIDER_TOKEN=*** MIT_SPIDER_URL=*** M6_TENANT=*** $0 <local_model_dir>"
   echo "You must provide exactly 1 parameters."
