@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 if [ "$#" -eq 1 ]; then
   MODEL_DIR=$(realpath "$1")
 elif [ "$#" -eq 0 ]; then

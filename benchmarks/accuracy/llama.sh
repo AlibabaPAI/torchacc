@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 if [[ $# -ne 2 && $# -ne 3 ]]; then
   echo "Usage: $0 <local_model_dir> <use_torchacc> [checkpiont_output_dir]"
   echo "  local_model_dir: Path to the local directory where the model will be saved."
@@ -17,8 +19,8 @@ MASTER_PORT="${MASTER_PORT:-9010}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
 BATCH_SIZE="${BATCH_SIZE:-2}"
 SEQLEN="${SEQLEN:-1024}"
-DATASET_NAME="${DATASET_NAME:-'wikitext'}"
-DATASET_CONFIG_NAME="${DATASET_CONFIG_NAME:-'wikitext-102-raw-v1'}"
+DATASET_NAME="${DATASET_NAME:-Salesforce/wikitext}"
+DATASET_CONFIG_NAME="${DATASET_CONFIG_NAME:-wikitext-2-raw-v1}"
 PRECISION="bf16=true"
 RUN_CLM=./run_clm.py
 
