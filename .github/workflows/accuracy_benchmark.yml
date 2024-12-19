@@ -15,7 +15,13 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Perform the accuracy benchmark
-      run: cd benchmarks/accuracy && bash ./run.sh
+      run: |
+        docker pull $UT_IMAGE
+        docker run -v $PWD:$PWD -w $PWD --net host --ipc host --shm-size 80G -t --rm --gpus all $UT_IMAGE bash -c '
+          pip install -r requirements/requirements-test.txt && \
+          git config --global --add safe.directory $PWD && \
+          pip install -e . && \
+          cd benchmarks/accuracy && bash ./run.sh'
       env:
         OSS_AK_ID: ${{ secrets.OSS_AK_ID }}
         OSS_AK_SECRET: ${{ secrets.OSS_AK_SECRET }}
