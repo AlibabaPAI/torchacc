@@ -23,6 +23,7 @@ jobs:
           pip install -e . && \
           cd benchmarks/accuracy && bash ./run.sh'
       env:
+        UT_IMAGE: ${{ secrets.UT_IMAGE }}
         OSS_AK_ID: ${{ secrets.OSS_AK_ID }}
         OSS_AK_SECRET: ${{ secrets.OSS_AK_SECRET }}
         OSS_ENDPOINT: ${{ secrets.OSS_ENDPOINT }}
