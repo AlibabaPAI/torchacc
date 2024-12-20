@@ -138,6 +138,7 @@ def patch_fa():
             from typing import Optional
 
             import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
+
             def _flash_attention_forward(
                 query_states: torch.Tensor,
                 key_states: torch.Tensor,
