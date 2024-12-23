@@ -97,7 +97,7 @@ def patch_fa():
                 window_size = (sliding_window,
                                sliding_window) if use_sliding_windows else (-1,
                                                                             -1)
-                if position_ids is not None:
+                if query_states.shape[0] == 1 and position_ids is not None:
                     return ops.flash_attn_varlen_position_ids_xla(
                         query_states,
                         key_states,
@@ -165,7 +165,7 @@ def patch_fa():
                 window_size = (sliding_window,
                                sliding_window) if use_sliding_windows else (-1,
                                                                             -1)
-                if position_ids is not None:
+                if query_states.shape[0] == 1 and position_ids is not None:
                     return ops.flash_attn_varlen_position_ids_xla(
                         query_states,
                         key_states,
