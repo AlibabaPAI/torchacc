@@ -17,6 +17,7 @@ jobs:
     - name: Perform the accuracy benchmark
       run: |
         docker pull $UT_IMAGE
+        echo 'Running accuracy benchmark...'
         docker run \
           -v $PWD:$PWD \
           -w $PWD \
