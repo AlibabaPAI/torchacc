@@ -19,7 +19,7 @@ fi
 
 MODEL_DIR=$(realpath $1)
 MODEL_ID=$(basename "$MODEL_DIR")_$(date +"%Y%m%d_%H%M%S")
-NUM_GPUS_TOTAL=1
+NUM_GPUS_TOTAL=4
 JUDGMENT_PARALLEL=4
 
 function install_fastchat {
@@ -27,8 +27,7 @@ function install_fastchat {
     git clone https://github.com/AlibabaPAI/FastChat_TorchAcc.git
   fi
 
-  output=$(python -m pip list | grep fschat)
-  if [[ -n $output ]]; then
+  if python -m pip list | grep -q fschat; then
     echo "All requirements are installed."
   else
     echo "Install requirements ..."

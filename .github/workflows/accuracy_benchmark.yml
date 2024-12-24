@@ -3,8 +3,8 @@ name: Daily Accuracy Benchmark
 on:
   workflow_dispatch:
   schedule:
-    # Runs daily at 3:00 AM, Beijing time.
-    - cron: '0 19 * * *' # This is UTC time
+    # Runs daily at 2:00 AM, Beijing time.
+    - cron: '0 18 * * *' # This is UTC time
 
 jobs:
   accuracy_benchmark:
@@ -20,7 +20,7 @@ jobs:
         docker run -v $PWD:$PWD -w $PWD --net host --ipc host --shm-size 80G -t --rm --gpus all $UT_IMAGE bash -c '
           git config --global --add safe.directory $PWD && \
           pip install -e . && \
-          cd benchmarks/accuracy && bash ./run.sh'
+          cd benchmarks/accuracy && NPROC_PER_NODE=4 bash ./run.sh'
       env:
         UT_IMAGE: ${{ secrets.UT_IMAGE }}
         OSS_AK_ID: ${{ secrets.OSS_AK_ID }}
