@@ -17,10 +17,24 @@ jobs:
     - name: Perform the accuracy benchmark
       run: |
         docker pull $UT_IMAGE
-        docker run -v $PWD:$PWD -w $PWD --net host --ipc host --shm-size 80G -t --rm --gpus all $UT_IMAGE bash -c '
-          git config --global --add safe.directory $PWD && \
-          pip install -e . && \
-          cd benchmarks/accuracy && NPROC_PER_NODE=4 bash ./run.sh'
+        docker run \
+          -v $PWD:$PWD \
+          -w $PWD \
+          --net host \
+          --ipc host \
+          --shm-size 80G \
+          -t --rm \
+          --gpus all \
+          -e OSS_AK_ID=$OSS_AK_ID \
+          -e OSS_AK_SECRET=$OSS_AK_SECRET \
+          -e OSS_ENDPOINT=$OSS_ENDPOINT \
+          -e M6_TENANT=$M6_TENANT \
+          -e MIT_SPIDER_TOKEN=$MIT_SPIDER_TOKEN \
+          -e MIT_SPIDER_URL=$MIT_SPIDER_URL \
+          $UT_IMAGE bash -c '
+            git config --global --add safe.directory $PWD && \
+            pip install -e . && \
+            cd benchmarks/accuracy && NPROC_PER_NODE=4 bash ./run.sh'
       env:
         UT_IMAGE: ${{ secrets.UT_IMAGE }}
         OSS_AK_ID: ${{ secrets.OSS_AK_ID }}
