@@ -14,6 +14,15 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Create .env file
+      run: |
+        echo "OSS_AK_ID=${{ secrets.OSS_AK_ID }}" >> .env
+        echo "OSS_AK_SECRET=${{ secrets.OSS_AK_SECRET }}" >> .env
+        echo "OSS_ENDPOINT=${{ secrets.OSS_ENDPOINT }}" >> .env
+        echo "M6_TENANT=${{ secrets.M6_TENANT }}" >> .env
+        echo "MIT_SPIDER_TOKEN=${{ secrets.MIT_SPIDER_TOKEN }}" >> .env
+        echo "MIT_SPIDER_URL=${{ secrets.MIT_SPIDER_URL }}" >> .env
+
     - name: Perform the accuracy benchmark
       run: |
         docker pull $UT_IMAGE
@@ -26,9 +35,13 @@ jobs:
           --shm-size 80G \
           -t --rm \
           --gpus all \
+          --env-file .env \
           $UT_IMAGE bash -c ' \
             git config --global --add safe.directory $PWD && \
             pip install -e . && \
             cd benchmarks/accuracy && NPROC_PER_NODE=4 bash ./run.sh'
+
+      - name: Clean up .env
+        run: rm -f .env
       env:
         UT_IMAGE: ${{ secrets.UT_IMAGE }}
