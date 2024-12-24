@@ -40,8 +40,8 @@ jobs:
             git config --global --add safe.directory $PWD && \
             pip install -e . && \
             cd benchmarks/accuracy && NPROC_PER_NODE=4 bash ./run.sh'
-
-      - name: Clean up .env
-        run: rm -f .env
       env:
         UT_IMAGE: ${{ secrets.UT_IMAGE }}
+
+    - name: Clean up .env
+      run: rm -f .env
