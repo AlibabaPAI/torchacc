@@ -31,7 +31,7 @@ jobs:
           -e M6_TENANT=$M6_TENANT \
           -e MIT_SPIDER_TOKEN=$MIT_SPIDER_TOKEN \
           -e MIT_SPIDER_URL=$MIT_SPIDER_URL \
-          $UT_IMAGE bash -c '
+          $UT_IMAGE bash -c ' \
             git config --global --add safe.directory $PWD && \
             pip install -e . && \
             cd benchmarks/accuracy && NPROC_PER_NODE=4 bash ./run.sh'
