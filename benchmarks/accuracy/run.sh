@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 if [ "$#" -eq 1 ]; then
   MODEL_DIR=$(realpath "$1")
 elif [ "$#" -eq 0 ]; then
@@ -25,6 +27,7 @@ ORIG_MODEL_EVAL_LOG="$RES_FOLDER/original_model_eval.log"
 TORCH_MODEL_EVAL_LOG="$RES_FOLDER/torch_model_eval.log"
 ACC_MODEL_EVAL_LOG="$RES_FOLDER/acc_model_eval.log"
 RES_LOG_FILE="$RES_FOLDER/result.log"
+OSS_BUCKET_PATH="oss://pai-devel/benchmark/accuracy/$(date +'%Y-%m')/$TIMESTAMP"
 
 mkdir -p $RES_FOLDER
 
@@ -55,14 +58,18 @@ function upload_to_oss {
       curl https://gosspublic.alicdn.com/ossutil/install.sh | bash
     fi
     ossutil config -e ${OSS_ENDPOINT} -i ${OSS_AK_ID} -k ${OSS_AK_SECRET}
-    ossutil cp -r -f -j 10 --exclude "*.safetensors" --exclude="*.bin" $RES_FOLDER oss://pai-devel/benchmark/accuracy/"$TIMESTAMP"
+    ossutil cp -r -f -j 10 --exclude "*.safetensors" --exclude="*.bin" $RES_FOLDER $OSS_BUCKET_PATH
   else
     echo "No oss information found. Skip uploading to oss."
   fi
 }
 
 
-function collect_and_show_results {
+is_numeric() {
+  [[ "$1" =~ ^[0-9]+([.][0-9]+)?$ ]]
+}
+
+function collect_and_upload_results {
   # Collect and compare the results
   ORIG_SCORE=$(tail -1 $ORIG_MODEL_EVAL_LOG | awk '{print $NF}')
   TORCH_SCORE=$(tail -1 $TORCH_MODEL_EVAL_LOG | awk '{print $NF}')
@@ -100,9 +107,31 @@ function collect_and_show_results {
     echo -e "\n${CYAN}More details can be found in    = ${RESET}${RES_FOLDER}"
     echo -e "${BLUE}==========================================================${RESET}"
   } | tee >(sed 's/\x1b\[[0-9;]*m//g' > $RES_LOG_FILE)
+
+  upload_to_oss
+
+  # Check the results
+  if ! is_numeric "$TORCH_TRAIN_LOSS" || \
+   ! is_numeric "$TORCH_TRAIN_RUNTIME" || \
+   ! is_numeric "$TORCH_TRAIN_STEPS_PER_SECOND" || \
+   ! is_numeric "$ACC_TRAIN_LOSS" || \
+   ! is_numeric "$ACC_TRAIN_RUNTIME" || \
+   ! is_numeric "$ACC_TRAIN_STEPS_PER_SECOND" || \
+   ! is_numeric "$ORIG_SCORE" || \
+   ! is_numeric "$TORCH_SCORE" || \
+   ! is_numeric "$ACC_SCORE" || \ ; then
+    echo "Error: One or more variables are not numeric."
+    exit 1
+  fi
+
+  LOSS_DIFF=$(echo "$TORCH_TRAIN_LOSS - $ACC_TRAIN_LOSS" | bc -l)
+  LOSS_DIFF_ABS=$(echo "${LOSS_DIFF#-}" | bc -l)
+  if (( $(echo "$LOSS_DIFF_ABS > 0.01" | bc -l) )); then
+    echo "Error: The difference between ACC_TRAIN_LOSS and TORCH_TRAIN_LOSS exceeds 1e-2."
+    exit 1
+  fi
 }
 
 do_train
 do_evaluation
-collect_and_show_results
-upload_to_oss
+collect_and_upload_results

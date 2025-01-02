@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 if [[ $# -ne 2 && $# -ne 3 ]]; then
   echo "Usage: $0 <local_model_dir> <use_torchacc> [checkpiont_output_dir]"
   echo "  local_model_dir: Path to the local directory where the model will be saved."
