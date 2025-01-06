@@ -1,7 +1,9 @@
+from typing import Any, Dict, List
+
 import binpacking
-import torch
 import numpy as np
-from typing import List, Dict, Any
+import torch
+
 
 def flatten_mapfn_for_swift(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
@@ -15,9 +17,11 @@ def flatten_mapfn_for_swift(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     packed_data = {}
     position_id_lengths = [len(item['input_ids']) for item in batch]
-    packed_data['input_ids'] = np.concatenate([item['input_ids'] for item in batch])
+    packed_data['input_ids'] = np.concatenate(
+        [item['input_ids'] for item in batch])
     packed_data['labels'] = np.concatenate([item['labels'] for item in batch])
-    packed_data['position_ids'] = np.concatenate([list(range(pil)) for pil in position_id_lengths])
+    packed_data['position_ids'] = np.concatenate(
+        [list(range(pil)) for pil in position_id_lengths])
     return packed_data
 
 
@@ -31,16 +35,18 @@ class SmartBatchingSampler:
         data_parallel_size: Data parallel size.
         consumed_samples: Consumed samples, mainly usedfor continue train from the last checkpoint.
     """
-    def __init__(self,
-                 dataset,  # Lengths of sequences,
-                 dataset_type, # Workload type 
-                 total_samples, # Total number of samples
-                 micro_batch_size, # Micro batch size
-                 data_parallel_rank, # Data parallel rank
-                 data_parallel_size, # Data parallel size
-                 consumed_samples = 0, # Consumed samples, mainly used for continue train from the last checkpoint
-                 balance_strategy='micro-batch', # Balance strategy
-                 ):
+
+    def __init__(
+            self,
+            dataset,  # Lengths of sequences,
+            dataset_type,  # Workload type 
+            total_samples,  # Total number of samples
+            micro_batch_size,  # Micro batch size
+            data_parallel_rank,  # Data parallel rank
+            data_parallel_size,  # Data parallel size
+            consumed_samples=0,  # Consumed samples, mainly used for continue train from the last checkpoint
+            balance_strategy='micro-batch',  # Balance strategy
+    ):
         # Keep a copy of input params for later use.
         self.dataset = dataset
         self.total_samples = total_samples
@@ -66,14 +72,16 @@ class SmartBatchingSampler:
             'invalid balance_strategy: {}, only {} and {} are supported'.format(self.balance_strategy, 'micro-batch', 'none')
         assert self.dataset_type in ['swift'], \
             'invalid dataset_type: {}, only {} are supported'.format(self.dataset_type, 'swift')
+
     def __len__(self):
         return self.total_samples // self.data_parallel_size
-    
+
     def get_sequence_length(self, idx):
         if self.dataset_type == "swift":
             return len(self.dataset[idx]['input_ids'])
+
     def construct_balanced_batch(self, batch):
-        # No balancing, just flatten the batch 
+        # No balancing, just flatten the batch
         if self.balance_strategy == "none":
             return batch[self.data_parallel_rank::self.data_parallel_size]
         # Micro-batch level balancing
@@ -81,24 +89,26 @@ class SmartBatchingSampler:
             packages = {}
             for idx, sample_idx in enumerate(batch):
                 packages[idx] = self.get_sequence_length(sample_idx)
-            bins = binpacking.to_constant_bin_number(packages, self.data_parallel_size)
+            bins = binpacking.to_constant_bin_number(packages,
+                                                     self.data_parallel_size)
             current_batch = []
             for idx in bins[self.data_parallel_rank].keys():
                 current_batch.append(batch[idx])
             return current_batch
-    
+
     def __iter__(self):
         # Sanity checks:
         active_total_samples = self.total_samples - self.last_batch_size
         self.epoch = self.consumed_samples // active_total_samples
         current_epoch_samples = self.consumed_samples % active_total_samples
         assert current_epoch_samples % self.micro_batch_times_data_parallel_size == 0
-        
+
         # Continue train from where it left
         g = torch.Generator()
         g.manual_seed(self.epoch)
-        shuffle_samples = torch.randperm(self.total_samples, generator=g).tolist()
-        shuffle_samples = shuffle_samples[current_epoch_samples: ]
+        shuffle_samples = torch.randperm(
+            self.total_samples, generator=g).tolist()
+        shuffle_samples = shuffle_samples[current_epoch_samples:]
         # Get one batch
         batch = []
         for idx in shuffle_samples:
