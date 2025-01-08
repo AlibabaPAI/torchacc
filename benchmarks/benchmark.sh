@@ -38,6 +38,12 @@ function run_benchmark() {
     local backend=$2
     local fsdp=$3
 
+    if [ "$backend" == "hybridtrace" ]; then
+        export TORCHACC_PATCH_FA=0
+    else
+        export TORCHACC_PATCH_FA=1
+    fi
+
     if [ -z "$fsdp" ]; then
         fsdp=1
     fi

@@ -127,4 +127,5 @@ def _set_env():
 
 
 patch.patch_ta_fa()
+patch.patch_transformers_fa()
 _set_env()
