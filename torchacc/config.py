@@ -228,7 +228,9 @@ class FSDPConfig(BaseConfig):
     Args:
         size (int): Number of fully sharded data parallel.
         wrap_layer_cls (Set[str]): Submodules with one of the `wrap_layer_cls` names
-            will be wrapped as separated FSDP units.
+            will be wrapped as separated FSDP units. For models composed using torch.nn.ModuleList,
+            such as LLM models, this can be set to 'auto' to automatically detect and wrap decoder
+            layers. Note that this supports models containing only a single type of decoder layer.
         flatten_parameters (bool): If ``True``, flatten parameters into a single contiguous tensor for
             all_gather and reduce_scatter, which could potentially improve speed. In this case, one
             cannot apply separate optimizer groups to different original parameters in the wrapped
