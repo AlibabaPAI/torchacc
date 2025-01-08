@@ -39,7 +39,7 @@ class SmartBatchingSampler:
     def __init__(
             self,
             dataset,  # Lengths of sequences,
-            dataset_type,  # Workload type 
+            dataset_type,  # Workload type
             total_samples,  # Total number of samples
             micro_batch_size,  # Micro batch size
             data_parallel_rank,  # Data parallel rank
@@ -74,7 +74,7 @@ class SmartBatchingSampler:
             'invalid dataset_type: {}, only {} are supported'.format(self.dataset_type, 'swift')
 
     def __len__(self):
-        return self.total_samples // self.data_parallel_size
+        return self.total_samples // self.data_parallel_size // self.micro_batch_size
 
     def get_sequence_length(self, idx):
         if self.dataset_type == "swift":
