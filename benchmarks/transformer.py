@@ -239,7 +239,7 @@ def train_gpt(args):
                             global_step=step)
                     logger.info(
                         f'[Iteration {step}/{len(train_loader)*args.num_train_epochs}] '
-                        f'loss: {loss:.6f}, '
+                        f'loss: {loss:.4f}, lr: {lr_scheduler.get_last_lr()[0]}, '
                         f'complete in {time_cost:.2f} s')
                 pbar.update(1)
                 if step == benchmark_start_step:

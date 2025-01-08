@@ -206,6 +206,14 @@ class FullyShardedDataParallel(ParallelModule):
                 m = torch.compile(m, backend="hybridtrace")
                 return xla_fsdp.XlaFullyShardedDataParallel(m, *args, **kwargs)
 
+        extra_kwargs = {}
+        if config.backend.partial_compile:
+            extra_kwargs["use_orig_params"] = True
+            extra_kwargs["forward_prefetch"] = True
+        if config.backend.hybrid_trace:
+            extra_kwargs["shard_param_on_dim_0"] = True
+            extra_kwargs["forward_prefetch"] = True
+
         if config.is_eager_backend():
             if config.dist.dp.size > 1:
                 process_group = (self.mesh.get_fsdp_proc_group(),
@@ -226,9 +234,8 @@ class FullyShardedDataParallel(ParallelModule):
                 auto_wrap_policy=auto_wrap_policy,
                 mixed_precision=mixed_precision,
                 device_id=torch.cuda.current_device(),
-                use_orig_params=True,
-                forward_prefetch=True,
-                sync_module_states=config.dist.fsdp.sync_module_states)
+                sync_module_states=config.dist.fsdp.sync_module_states,
+                **extra_kwargs)
         else:
             model = xla_fsdp.XlaFullyShardedDataParallel(
                 model,
@@ -240,11 +247,10 @@ class FullyShardedDataParallel(ParallelModule):
                 auto_wrapper_callable=auto_wrapper_callable,
                 compute_dtype=dtype,
                 buffer_dtype=dtype,
-                shard_param_on_dim_0=config.backend.hybrid_trace,
-                forward_prefetch=config.backend.hybrid_trace,
                 sharding_groups=self.mesh.get_fsdp_rank_groups(),
                 sharding_rank=self.mesh.get_fsdp_rank(),
-                sharding_world_size=self.mesh.get_fsdp_num())
+                sharding_world_size=self.mesh.get_fsdp_num(),
+                **extra_kwargs)
         return model
 
     def clip_grad_norm_(self, max_grad_norm):
