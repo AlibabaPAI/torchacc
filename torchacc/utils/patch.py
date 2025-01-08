@@ -1,6 +1,7 @@
 import inspect
 import os
 from functools import wraps
+from typing import Optional
 
 import torch
 
@@ -225,7 +226,7 @@ def patch_transformers_fa():
 def patch_ta_fa():
     try:
         import flash_attn
-        if hasattr(flash_attn.flash_attn_func, '__orig'):
+        if hasattr(flash_attn.flash_attn_func, '_orig'):
             return
         flash_attn.flash_attn_func = _choose_functions(
             flash_attn.flash_attn_func, ops.flash_attn_xla)
@@ -315,14 +316,26 @@ def patch_qwen(use_flash_attn):
 
 
 def patch_autocast(target_device='cuda'):
-    if os.getenv('TORCHACC_PATCH_TORCH_AUTOCAST', '1') in ['1', 'true', 'True']:
+    if os.getenv('TORCHACC_PATCH_TORCH_AUTOCAST', '1') in [
+            '1', 'true', 'True'
+    ] and not hasattr(torch.autocast.__init__, '_orig'):
         original_init = torch.autocast.__init__
 
-        def patched_init(self, device_type: str, *args, **kwargs):
+        def patched_init(self,
+                         device_type: str,
+                         dtype: Optional[torch.dtype] = None,
+                         enabled: bool = True,
+                         cache_enabled: Optional[bool] = None):
             if target_device == 'cuda' and device_type == 'xla':
                 device_type = 'cuda'
             elif target_device == 'xla' and device_type == 'cuda':
                 device_type = 'xla'
-            original_init(self, device_type, *args, **kwargs)
+            original_init(
+                self,
+                device_type,
+                dtype=dtype,
+                enabled=enabled,
+                cache_enabled=cache_enabled)
 
-        torch.autocast.__init__ = patched_init
+        torch.autocast.__init__ = _patch_functions(torch.autocast.__init__,
+                                                   patched_init)

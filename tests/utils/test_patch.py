@@ -7,6 +7,9 @@ import torchacc as ta
 
 class PatchAutocastTest(unittest.TestCase):
 
+    def setUp(self):
+        ta.utils.patch.patch_autocast()
+
     def _matmul_with_autocast(self, lhs, rhs, first_device, second_device):
         with torch.autocast(device_type=first_device, dtype=torch.bfloat16):
             first = torch.matmul(lhs, rhs)
