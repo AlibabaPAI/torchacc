@@ -162,19 +162,13 @@ def train_gpt(args):
             args.num_train_epochs = (args.benchmark_steps +
                                      6) // len(train_loader) + 1
 
-    lr = 5e-5
-    if args.hybrid_trace:
-        lr = torch.tensor(lr)
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-8)
+        model.parameters(), lr=5e-5, betas=(0.9, 0.999), eps=1e-8)
     lr_scheduler = _build_lr_scheduler(optimizer, train_loader,
                                        args.num_train_epochs)
     scaler = torch.cuda.amp.GradScaler() if args.fp16 else None
     amp_enabled = args.fp16 or args.bf16
     amp_dtype = torch.float16 if args.fp16 else torch.bfloat16
-
-    if args.hybrid_trace:
-        optimizer.step = torch.compile(optimizer.step, backend="hybridtrace")
 
     model.train()
     if args.global_rank == 0 and args.tb_folder:

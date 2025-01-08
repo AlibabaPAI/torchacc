@@ -65,6 +65,7 @@ def apply_patch(config: ta.Config) -> None:
 
     if config.backend.hybrid_trace:
         patch.patch_autocast(target_device='xla')
+        patch.patch_optim_step(backend='hybridtrace')
     else:
         patch.patch_autocast(target_device='cuda')
         patch.patch_transformers_fa()

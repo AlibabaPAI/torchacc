@@ -1,7 +1,7 @@
 import inspect
 import os
 from functools import wraps
-from typing import Optional
+from typing import Any, Dict, Iterable, Optional, Union
 
 import torch
 
@@ -57,6 +57,30 @@ def patch_amp():
     torch.optim.Adam = _patch_functions(torch.optim.Adam, syncfree.Adam)
     torch.optim.AdamW = _patch_functions(torch.optim.AdamW, syncfree.AdamW)
     torch.cuda.amp.GradScaler = amp.GradScaler
+
+
+def patch_optim_step(backend):
+    '''
+    replace the optimizer step with the hybridtrace enabled step.
+    '''
+    if hasattr(torch.optim.Optimizer.__init__, "_orig"):
+        return
+    orign_init_fn = torch.optim.Optimizer.__init__
+
+    def _init_fn(self, params: Union[Iterable[torch.Tensor],
+                                     Iterable[Dict[str, Any]]],
+                 defaults: Dict[str, Any]) -> None:
+        if "lr" in defaults and isinstance(defaults["lr"], (float, int)):
+            defaults["lr"] = torch.tensor(defaults["lr"])
+        orign_init_fn(self, params, defaults)
+
+    torch.optim.Optimizer.__init__ = _patch_functions(
+        torch.optim.Optimizer.__init__, _init_fn)
+    torch.optim.SGD.step = torch.compile(torch.optim.SGD.step, backend=backend)
+    torch.optim.Adam.step = torch.compile(
+        torch.optim.Adam.step, backend=backend)
+    torch.optim.AdamW.step = torch.compile(
+        torch.optim.AdamW.step, backend=backend)
 
 
 def patch_transformers_fa():
