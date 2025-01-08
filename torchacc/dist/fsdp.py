@@ -185,8 +185,11 @@ class FullyShardedDataParallel(ParallelModule):
             gc_cnt = config.memory.gc_cnt
 
             def auto_wrapper_callable(m, *args, **kwargs):
-                if config.use_dynamo:
-                    m = torch.compile(m, backend="openxla")
+                if config.backend.hybrid_trace:
+                    for submodule in m.modules():
+                        submodule._is_fsdp_managed_module = True
+                        submodule._fsdp_use_orig_params = True
+                    m = torch.compile(m, backend="hybridtrace")
                 nonlocal gc_cnt
                 if gc_cnt is None:
                     m = checkpoint.checkpoint_module(m)
@@ -194,9 +197,13 @@ class FullyShardedDataParallel(ParallelModule):
                     m = checkpoint.checkpoint_module(m)
                     gc_cnt -= 1
                 return xla_fsdp.XlaFullyShardedDataParallel(m, *args, **kwargs)
-        elif config.use_dynamo:
+        elif config.backend.hybrid_trace:
+
             def auto_wrapper_callable(m, *args, **kwargs):
-                m = torch.compile(m, backend="openxla")
+                for submodule in m.modules():
+                    submodule._is_fsdp_managed_module = True
+                    submodule._fsdp_use_orig_params = True
+                m = torch.compile(m, backend="hybridtrace")
                 return xla_fsdp.XlaFullyShardedDataParallel(m, *args, **kwargs)
 
         if config.is_eager_backend():
@@ -233,6 +240,8 @@ class FullyShardedDataParallel(ParallelModule):
                 auto_wrapper_callable=auto_wrapper_callable,
                 compute_dtype=dtype,
                 buffer_dtype=dtype,
+                shard_param_on_dim_0=config.backend.hybrid_trace,
+                forward_prefetch=config.backend.hybrid_trace,
                 sharding_groups=self.mesh.get_fsdp_rank_groups(),
                 sharding_rank=self.mesh.get_fsdp_rank(),
                 sharding_world_size=self.mesh.get_fsdp_num())

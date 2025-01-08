@@ -14,7 +14,9 @@ def get_hf_dataset_loader(tokenizer,
                           data_num_replicas=1):
     if dataset_name_or_path.endswith(".json"):
         raw_datasets = datasets.load_dataset(
-            "json", data_files=dataset_name_or_path, split='train',
+            "json",
+            data_files=dataset_name_or_path,
+            split='train',
             cache_dir='./log/dataset')
     else:
         raw_datasets = datasets.load_dataset(

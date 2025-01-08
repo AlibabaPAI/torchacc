@@ -16,6 +16,8 @@ function test_standalone() {
     torchrun --nproc_per_node=4 standalone/ta_accelerate.py --backend eager --fsdp_num 4
     # PyTorch FSDP + DP (HYBRID_SHARD)
     torchrun --nproc_per_node=4 standalone/ta_accelerate.py --backend eager --fsdp_num 2
+    # PyTorch FSDP + GC
+    torchrun --nproc_per_node=4 standalone/ta_accelerate.py --backend eager --fsdp_num 4 --gc
     torchrun --nproc_per_node=2 standalone/default_config.py
     torchrun --nproc_per_node=2 standalone/offload.py
 }

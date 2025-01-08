@@ -271,7 +271,10 @@ class FSDPConfig(BaseConfig):
 
 
 class SPConfig(BaseConfig):
-    """Configuration for 
+    """Configuration for sequence parallel
+
+    Args:
+        size (int): Number of sequence parallel.
     """
     size: int = 1
 
@@ -336,13 +339,56 @@ class DistConfig(BaseConfig):
                 )
 
 
+@dataclass
+class BackendConfig(BaseConfig):
+    """Configuration for backend
+
+    Args:
+        mode (str): Backend mode. Options: 'lazy', 'eager'.
+        hybrid_trace (bool): Whether to use the hybrid trace mode to accelerate tracing.
+        partial_compile (bool): Whether to use partial compile to accelerate model execution.
+    """
+    mode: str = 'lazy' if is_torch_xla_available() else 'eager'
+    hybrid_trace: bool = False
+    partial_compile: bool = False
+
+    def validate(self):
+        assert isinstance(self.mode,
+                          str), "BackendConfig.mode should be of str type"
+        assert isinstance(
+            self.hybrid_trace,
+            bool), "BackendConfig.hybrid_trace should be of bool type"
+        assert isinstance(
+            self.partial_compile,
+            bool), "BackendConfig.partial_compile should be of bool type"
+        if self.mode not in ['lazy', 'eager']:
+            raise ValueError(
+                f"Expect 'lazy' or 'eager' in BackendConfig.mode, but got {self.mode}"
+            )
+        if not is_torch_xla_available() and (self.mode == 'lazy' or
+                                             self.partial_compile):
+            msg = "lazy backend" if self.mode == 'lazy' else "partial compile"
+            raise NotImplementedError(
+                f"The {msg} of TorchAcc requires the installation of torch_xla. Please use `config.backend='eager'`"
+                "or follow the instructions in https://torchacc.readthedocs.io/en/stable/install.html to use the recommended Docker image."
+            )
+        if self.hybrid_trace and self.mode == 'eager':
+            raise ValueError(
+                "BackendConfig.hybrid_trace is not avilable when BackendConfig.mode is 'eager'"
+            )
+        if self.partial_compile and self.mode == 'lazy':
+            raise ValueError(
+                "BackendConfig.partial_compile is not avilable when BackendConfig.mode is 'lazy'"
+            )
+
+
 # TODO: support dict
 @dataclass
 class Config(BaseConfig):
     """Configuration for TorchAcc
 
     Args:
-        backend (str): Backend used for acceleration. Options: 'lazy', 'eager'.
+        backend (BackendConfig): Backend used for acceleration.
         compute (ComputeConfig): Configuration for computational optimization.
         memory (MemoryConfig): Configuration for memory optimization.
         dist (DistConfig): Configuration for distributed parallel.
@@ -350,17 +396,16 @@ class Config(BaseConfig):
             by get_mesh().
         dataloader (DataLoaderConfig): Configuration for data loader optimization.
     """
-    backend: str = 'lazy' if is_torch_xla_available() else 'eager'
-
+    backend: BackendConfig = field(default_factory=BackendConfig)
     compute: ComputeConfig = field(default_factory=ComputeConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     dist: DistConfig = field(default_factory=DistConfig)
     dataloader: DataLoaderConfig = field(default_factory=DataLoaderConfig)
-    use_dynamo: bool = False
 
     def validate(self):
-        assert isinstance(self.backend,
-                          str), "Config.backend should be of str type"
+        assert isinstance(
+            self.backend,
+            BackendConfig), "Config.backend should be of BackendConfig type"
         assert isinstance(
             self.compute,
             ComputeConfig), "Config.compute should be of ComputeConfig type"
@@ -373,15 +418,7 @@ class Config(BaseConfig):
         assert isinstance(
             self.dist, DistConfig), "Config.dist should be of DistConfig type"
 
-        assert self.backend in ['lazy', 'eager'
-                               ], "Config.backend should be 'lazy' or 'eager'"
-
-        if not is_torch_xla_available() and self.backend == 'lazy':
-            raise NotImplementedError(
-                "The lazy backend of TorchAcc requires the installation of torch_xla. Please use `config.backend='eager'`"
-                "or follow the instructions in https://torchacc.readthedocs.io/en/stable/install.html to use the recommended Docker image."
-            )
-
+        self.backend.validate()
         self.compute.validate()
         self.memory.validate()
         self.dataloader.validate()
@@ -394,12 +431,7 @@ class Config(BaseConfig):
         if hasattr(self, "_mesh"):
             return self._mesh
         self.validate()
-        if dist.is_initialized():
-            assert dist.get_backend() == ta.dist.BACKEND_NAME, "The backend for initializing the distributed" \
-                f" process group should be {ta.dist.BACKEND_NAME}."
-        else:
-            dist.init_process_group(backend=ta.dist.BACKEND_NAME)
-            dist.barrier()
+        ta.dist.init_process_group(self)
         if self.dist.sp.size > 1 and os.getenv('XLA_USE_SPMD', '0') == '0':
             context_parallel.initialize_context_parallel(self.dist.sp.size)
 
@@ -437,9 +469,9 @@ class Config(BaseConfig):
     def is_lazy_backend(self):
         """Whether lazy backend is enabled.
         """
-        return self.backend == 'lazy'
+        return self.backend.mode == 'lazy'
 
     def is_eager_backend(self):
         """Whether eager backend is enabled.
         """
-        return self.backend == 'eager'
+        return self.backend.mode == 'eager'

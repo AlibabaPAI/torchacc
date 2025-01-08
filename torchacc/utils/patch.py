@@ -131,7 +131,7 @@ def patch_fa():
                         window_size=window_size,
                         deterministic=deterministic)
 
-            modeling_flash_attention_utils._flash_attention_forward = _patch_functions(
+            modeling_flash_attention_utils._flash_attention_forward = _choose_functions(
                 modeling_flash_attention_utils._flash_attention_forward,
                 _flash_attention_forward)
         elif version.parse(version_ts) > version.parse("4.46.3"):
@@ -201,7 +201,7 @@ def patch_fa():
                         deterministic=deterministic,
                         causal=is_causal)
 
-            modeling_flash_attention_utils._flash_attention_forward = _patch_functions(
+            modeling_flash_attention_utils._flash_attention_forward = _choose_functions(
                 modeling_flash_attention_utils._flash_attention_forward,
                 _flash_attention_forward)
         else:
@@ -219,6 +219,17 @@ def patch_fa():
     except Exception as e:
         logger.warn(
             f'torchacc will not patch any FlashAttention function due to {e}.')
+
+
+def patch_ta_fa():
+    try:
+        import flash_attn
+        if hasattr(flash_attn.flash_attn_func, '__orig'):
+            return
+        flash_attn.flash_attn_func = _choose_functions(
+            flash_attn.flash_attn_func, ops.flash_attn_xla)
+    except ImportError:
+        logger.warn(f"Patch flash_attn.flash_attn_func failed.")
 
 
 def patch_llama(use_flash_attn):

@@ -15,6 +15,7 @@ from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
 import torch_xla
 import torch_xla.core.xla_model as xm
 
+
 def _args_validation(args):
     if not args.acc:
         if args.tp_size > 1:
@@ -51,8 +52,7 @@ def _parse_args():
     parser.add_argument('--num_train_epochs', type=int, default=2)
     parser.add_argument('--acc', action='store_true', default=False)
     parser.add_argument('--backend', type=str, default='lazy')
-    parser.add_argument(
-        '--use_dynamo', action='store_true', default=False)
+    parser.add_argument('--hybrid_trace', action='store_true', default=False)
     parser.add_argument('--fp16', action='store_true', default=False)
     parser.add_argument('--bf16', action='store_true', default=False)
     parser.add_argument('--gc', action='store_true', default=False)
@@ -60,12 +60,9 @@ def _parse_args():
     parser.add_argument('--profile', action='store_true', default=False)
     parser.add_argument(
         '--disable_loss_print', action='store_true', default=False)
-    parser.add_argument(
-        '--benchmark', action='store_true', default=False)
-    parser.add_argument(
-        '--benchmark_steps', type=int, default=100)
-    parser.add_argument(
-        '--deterministic', action='store_true', default=False)
+    parser.add_argument('--benchmark', action='store_true', default=False)
+    parser.add_argument('--benchmark_steps', type=int, default=100)
+    parser.add_argument('--deterministic', action='store_true', default=False)
 
     args = parser.parse_args()
     args.global_rank = int(os.getenv('RANK', '0'))
@@ -86,12 +83,10 @@ def _setup_ddp(local_rank):
 
 def _get_config(args):
     config = ta.Config()
-    config.use_dynamo = args.use_dynamo
-    config.backend = args.backend
+    config.backend.mode = args.backend
+    config.backend.hybrid_trace = args.hybrid_trace
     config.compute.fp16 = args.fp16
     config.compute.bf16 = args.bf16
-
-    config.compute.disable_kernel_patches = True
 
     config.memory.gc = args.gc
     config.memory.gc_cls = {args.model_block}
@@ -100,7 +95,7 @@ def _get_config(args):
     config.dist.tp.size = args.tp_size
     config.dist.fsdp.size = args.fsdp_size
     config.dist.fsdp.wrap_layer_cls = {args.model_block}
-    config.dist.fsdp.flatten_parameters = not args.use_dynamo
+    config.dist.fsdp.flatten_parameters = True
 
     return config
 
@@ -112,9 +107,12 @@ def _build_model_and_loader(args):
     config.use_cache = False
     if args.use_flash_attn:
         model = AutoModelForCausalLM.from_config(
-            config, attn_implementation='flash_attention_2', torch_dtype=amp_dtype)
+            config,
+            attn_implementation='flash_attention_2',
+            torch_dtype=amp_dtype)
     else:
-        model = AutoModelForCausalLM.from_config(config, attn_implementation='eager')
+        model = AutoModelForCausalLM.from_config(
+            config, attn_implementation='eager')
 
     if args.global_rank == 0:
         logger.info(f'Model: {model}')
@@ -131,8 +129,6 @@ def _build_model_and_loader(args):
     if args.acc:
         config = _get_config(args)
         model, train_loader = ta.accelerate(model, train_loader, config)
-        # if args.backend == "lazy" and args.use_flash_attn:
-        #     ta.utils.patch.patch_llama(True)
     else:
         model = model.to(args.local_rank)
         model = torch.nn.parallel.DistributedDataParallel(model)
@@ -158,10 +154,11 @@ def train_gpt(args):
         if len(train_loader) >= (args.benchmark_steps + 6):
             args.num_train_epochs = 1
         else:
-            args.num_train_epochs = (args.benchmark_steps + 6) // len(train_loader) + 1
+            args.num_train_epochs = (args.benchmark_steps +
+                                     6) // len(train_loader) + 1
 
     lr = 5e-5
-    if args.use_dynamo:
+    if args.hybrid_trace:
         lr = torch.tensor(lr)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=lr, betas=(0.9, 0.999), eps=1e-8)
@@ -171,8 +168,8 @@ def train_gpt(args):
     amp_enabled = args.fp16 or args.bf16
     amp_dtype = torch.float16 if args.fp16 else torch.bfloat16
 
-    if args.use_dynamo:
-        optimizer.step = torch.compile(optimizer.step, backend="openxla")
+    if args.hybrid_trace:
+        optimizer.step = torch.compile(optimizer.step, backend="hybridtrace")
 
     model.train()
     if args.global_rank == 0 and args.tb_folder:
@@ -205,12 +202,12 @@ def train_gpt(args):
                         for key, value in inputs.items()
                         if isinstance(value, torch.Tensor)
                     }
-                if args.use_dynamo:
+                if args.hybrid_trace:
                     device = model.device.type
                 else:
                     device = "cuda"
-                with torch.autocast(device,
-                        enabled=amp_enabled, dtype=amp_dtype):
+                with torch.autocast(
+                        device, enabled=amp_enabled, dtype=amp_dtype):
                     outputs = model(**inputs)
                     loss = outputs['loss']
                 if scaler:
@@ -241,21 +238,25 @@ def train_gpt(args):
                             global_step=step)
                         writer.add_scalar('loss', loss, global_step=step)
                         writer.add_scalar(
-                            'lr', lr_scheduler.get_last_lr()[0], global_step=step)
+                            'lr',
+                            lr_scheduler.get_last_lr()[0],
+                            global_step=step)
                     logger.info(
                         f'[Iteration {step}/{len(train_loader)*args.num_train_epochs}] '
                         f'loss: {loss:.6f}, '
                         f'complete in {time_cost:.2f} s')
-                # pbar.update(1)
+                pbar.update(1)
                 if step == benchmark_start_step:
                     benchmark_start_time = time.time()
                 if args.benchmark and step == benchmark_end_step:
                     if args.global_rank == 0:
                         bench_time_cost = time.time() - benchmark_start_time
-                        total_samples = (benchmark_end_step - benchmark_start_step) * args.batch_size * args.world_size
+                        total_samples = (benchmark_end_step -
+                                         benchmark_start_step
+                                        ) * args.batch_size * args.world_size
                         logger.info(
-                            f'[BENCHMARK] throughput: {total_samples / bench_time_cost:.4f} samples/s, max memory usage: {torch.cuda.max_memory_allocated() / 1024.0 / 1024.0 / 1024.0:.4f} GB')
-                    print(f"RANK{args.global_rank} Exiting...", flush=True)
+                            f'[BENCHMARK] throughput: {total_samples / bench_time_cost:.4f} samples/s, max memory usage: {torch.cuda.max_memory_allocated() / 1024.0 / 1024.0 / 1024.0:.4f} GB'
+                        )
                     return
                 if args.global_rank == 0 and args.profile:
                     prof.step()
@@ -263,11 +264,6 @@ def train_gpt(args):
 
 if __name__ == '__main__':
     args = _parse_args()
-
-    # if args.global_rank == 0:
-    #     os.environ['XLA_FLAGS'] = f"{os.environ['XLA_FLAGS']} --xla_dump_hlo_as_text --xla_dump_to=./hlo"
-    #     os.environ['XLA_DYNAMO_DEBUG'] = "1"
-        # os.environ['PT_XLA_DEBUG'] = "1"
 
     seed = 101
     torch.manual_seed(seed)
@@ -277,11 +273,11 @@ if __name__ == '__main__':
         torch.use_deterministic_algorithms(True)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-        os.environ['CUBLAS_WORKSPACE_CONFIG']=':4096:8'
-        os.environ['TF_CUDNN_DETERMINISTIC']='1'
-        os.environ['TF_DETERMINISTIC_OPS']='1'
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+        os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+        os.environ['TF_DETERMINISTIC_OPS'] = '1'
         torch_xla._XLAC._xla_set_use_full_mat_mul_precision(
-        use_full_mat_mul_precision=True)
+            use_full_mat_mul_precision=True)
 
     if not args.acc or args.backend != "lazy":
         _setup_ddp(args.local_rank)
