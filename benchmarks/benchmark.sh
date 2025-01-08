@@ -19,7 +19,6 @@ if [ ${#MODELS[@]} -eq 0 ]; then
     exit 1
 fi
 
-export USE_TORCH_XLA=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export PJRT_USE_TORCH_ALLOCATOR=1
 
@@ -39,9 +38,14 @@ function run_benchmark() {
     local fsdp=$3
 
     if [ "$backend" == "hybridtrace" ]; then
+        export USE_TORCH_XLA=1
         export TORCHACC_PATCH_FA=0
-    else
+    elif [ "$backend" == "torchacc" ]; then
+        export USE_TORCH_XLA=1
         export TORCHACC_PATCH_FA=1
+    elif [ "$backend" == "cuda" ]; then
+        export USE_TORCH_XLA=0
+        export TORCHACC_PATCH_FA=0
     fi
 
     if [ -z "$fsdp" ]; then
