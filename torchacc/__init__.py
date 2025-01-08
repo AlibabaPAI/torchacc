@@ -126,6 +126,5 @@ def _set_env():
     os.environ["XLA_FLAGS"] = xla_flags
 
 
-patch.patch_fa()
-patch.patch_autocast()
+patch.patch_ta_fa()
 _set_env()

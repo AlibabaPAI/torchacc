@@ -202,12 +202,8 @@ def train_gpt(args):
                         for key, value in inputs.items()
                         if isinstance(value, torch.Tensor)
                     }
-                if args.hybrid_trace:
-                    device = model.device.type
-                else:
-                    device = "cuda"
-                with torch.autocast(
-                        device, enabled=amp_enabled, dtype=amp_dtype):
+                with torch.cuda.amp.autocast(
+                        enabled=amp_enabled, dtype=amp_dtype):
                     outputs = model(**inputs)
                     loss = outputs['loss']
                 if scaler:

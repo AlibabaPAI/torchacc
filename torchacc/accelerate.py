@@ -47,22 +47,27 @@ def broadcast_master_param(model: torch.nn.Module, config: ta.Config) -> None:
 
 
 def apply_patch(config: ta.Config) -> None:
+    if config.is_eager_backend():
+        if not config.compute.disable_kernel_patches and not config.backend.partial_compile:
+            ta.ops.apply_liger_kernel()
+        return
+
     # compute
     if config.compute.acc_scaled_dot_attn:
         torch.nn.functional.scaled_dot_product_attention = ta.ops.scaled_dot_product_attention
-
-    if not config.compute.disable_kernel_patches and config.is_eager_backend(
-    ) and not config.backend.partial_compile:
-        ta.ops.apply_liger_kernel()
 
     # replace the optimizer and grad scaler with the syncfree optimizer and the torchacc grad scaler
     if config.compute.fp16 and config.is_lazy_backend():
         patch.patch_amp()
 
-    if not (config.backend.hybrid_trace or config.backend.partial_compile):
+    if not config.backend.hybrid_trace:
         ta.utils.decompose.replace_decompose()
-    elif config.backend.hybrid_trace:
-        patch.patch_ta_fa()
+
+    if config.backend.hybrid_trace:
+        patch.patch_autocast(target_device='xla')
+    else:
+        patch.patch_autocast(target_device='cuda')
+        patch.patch_transformers_fa()
 
 
 def accelerate(

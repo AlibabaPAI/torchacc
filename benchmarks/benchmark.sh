@@ -1,11 +1,9 @@
 #!/bin/bash
 set -exo pipefail
 
-export CUDA_VISIBLE_DEVICES=4,5,6,7
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 
 DATASET_PATH=data/wikitext-2-raw-v1.json
-
-MODELS=("Qwen2.5-3B-Instruct" "Llama-3.2-3B-Instruct" "gemma-2-2b-it")
 
 timestamp=$(date +%Y%m%d_%H%M%S)
 LOG_DIR="./log/benchmark/${timestamp}"
@@ -13,6 +11,13 @@ LOG_DIR="./log/benchmark/${timestamp}"
 mkdir -p $LOG_DIR
 
 MODEL_DIR="./models"
+
+MODELS=($(find "$MODEL_DIR" -maxdepth 1 -type d -mindepth 1 -exec basename {} \;))
+
+if [ ${#MODELS[@]} -eq 0 ]; then
+    echo "No models found in $MODEL_DIR. Please run \`bash prepare.sh\` first."
+    exit 1
+fi
 
 export USE_TORCH_XLA=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -59,7 +64,7 @@ function run_benchmark() {
 
 
 for MODEL in "${MODELS[@]}"; do
-    run_benchmark "$MODEL" "hybrid_trace" ${FSDP_SIZE}
+    run_benchmark "$MODEL" "hybridtrace" ${FSDP_SIZE}
     run_benchmark "$MODEL" "torchacc" ${FSDP_SIZE}
     run_benchmark "$MODEL" "cuda" ${FSDP_SIZE}
 done

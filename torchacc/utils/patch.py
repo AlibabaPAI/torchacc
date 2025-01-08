@@ -58,7 +58,7 @@ def patch_amp():
     torch.cuda.amp.GradScaler = amp.GradScaler
 
 
-def patch_fa():
+def patch_transformers_fa():
     '''
     Replace `transformers.modeling_flash_attention_utils._flash_attention_forward` with
     `torchacc.ops.flash_attn_xla` and `torchacc.ops.flash_attn_varlen_xla`
@@ -74,6 +74,7 @@ def patch_fa():
                 "4.43.0") and version.parse(version_ts) <= version.parse(
                     "4.46.3"):
             from typing import Optional
+
             import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
 
             def _flash_attention_forward(
@@ -264,6 +265,7 @@ def patch_qwen(use_flash_attn):
     and replace flash_attn with the interface in torchacc. This requires transformers>=4.41.0.
     '''
     import inspect
+
     import transformers
     from packaging import version
 
@@ -312,13 +314,15 @@ def patch_qwen(use_flash_attn):
             logger.warning(f"patch qwen2 failed due to: {e}")
 
 
-def patch_autocast():
+def patch_autocast(target_device='cuda'):
     if os.getenv('TORCHACC_PATCH_TORCH_AUTOCAST', '1') in ['1', 'true', 'True']:
         original_init = torch.autocast.__init__
 
         def patched_init(self, device_type: str, *args, **kwargs):
-            if device_type == 'xla':
+            if target_device == 'cuda' and device_type == 'xla':
                 device_type = 'cuda'
+            elif target_device == 'xla' and device_type == 'cuda':
+                device_type = 'xla'
             original_init(self, device_type, *args, **kwargs)
 
         torch.autocast.__init__ = patched_init

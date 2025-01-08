@@ -603,8 +603,10 @@ def flash_attn_xla(
 
 torch.library.define(
     "torchacc::flash_attention_forward",
-    "(Tensor q, Tensor k, Tensor v, Tensor? attention_mask, Tensor? alibi_slopes, float dropout_p, float softmax_scale, bool zero_tensors, bool causal, int window_size_left, int window_size_right, bool return_softmax, Tensor? gen) -> (Tensor softmax_lse, Tensor out, Tensor rng_state)"
-)
+    "(Tensor q, Tensor k, Tensor v, Tensor? attention_mask, Tensor? alibi_slopes, "
+    "float dropout_p, float softmax_scale, bool zero_tensors, bool causal, "
+    "int window_size_left, int window_size_right, bool return_softmax, Tensor? gen)"
+    " -> (Tensor softmax_lse, Tensor out, Tensor rng_state)")
 
 
 @torch.library.impl("torchacc::flash_attention_forward", "default")
@@ -634,8 +636,11 @@ def flash_attention_forward_abstract(q, k, v, attention_mask, alibi_slopes,
 
 torch.library.define(
     "torchacc::flash_attention_backward",
-    "(Tensor dout, Tensor q, Tensor k, Tensor v, Tensor out, Tensor softmax_lse, Tensor? cu_q_lens, Tensor? cu_k_lens, Tensor? alibi_slopes, float dropout_p, float softmax_scale, bool zero_tensors, bool causal, int window_size_left, int window_size_right, bool deterministic, Tensor? gen, Tensor rng_state) -> (Tensor dq, Tensor dk, Tensor dv, Tensor softmax_d)"
-)
+    "(Tensor dout, Tensor q, Tensor k, Tensor v, Tensor out, Tensor softmax_lse, "
+    "Tensor? cu_q_lens, Tensor? cu_k_lens, Tensor? alibi_slopes, float dropout_p, "
+    "float softmax_scale, bool zero_tensors, bool causal, int window_size_left, "
+    "int window_size_right, bool deterministic, Tensor? gen, Tensor rng_state)"
+    " -> (Tensor dq, Tensor dk, Tensor dv, Tensor softmax_d)")
 
 
 @torch.library.impl("torchacc::flash_attention_backward", "default")
