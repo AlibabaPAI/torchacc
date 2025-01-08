@@ -129,6 +129,11 @@ def _build_model_and_loader(args):
     if args.acc:
         config = _get_config(args)
         model, train_loader = ta.accelerate(model, train_loader, config)
+        if not args.hybrid_trace and args.backend == 'lazy':
+            if "llama" in args.model_name.lower():
+                ta.utils.patch.patch_llama(use_flash_attn=args.use_flash_attn)
+            if "qwen" in args.model_name.lower():
+                ta.utils.patch.patch_qwen(use_flash_attn=args.use_flash_attn)
     else:
         model = model.to(args.local_rank)
         model = torch.nn.parallel.DistributedDataParallel(model)

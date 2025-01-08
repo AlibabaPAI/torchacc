@@ -12,7 +12,7 @@ cd models
 model_urls=(
     "https://www.modelscope.cn/Qwen/Qwen2.5-3B-Instruct.git"
     "https://www.modelscope.cn/LLM-Research/Llama-3.2-3B-Instruct.git"
-    "https://www.modelscope.cn/LLM-Research/gemma-2-2b-it.git"
+    # "https://www.modelscope.cn/LLM-Research/gemma-2-2b-it.git" # this model uses flash_attn_varlen_func which is not supported by hybridtrace
 )
 
 clone_if_not_exists() {

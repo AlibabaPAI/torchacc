@@ -208,16 +208,8 @@ def patch_transformers_fa():
                 _flash_attention_forward)
         else:
             logger.warn(
-                f'FlashAttention is not successfully patched with transformers version={version_ts},'
-                ' try to patch flash_attn.flash_attn_func')
-            try:
-                import flash_attn
-                if hasattr(flash_attn.flash_attn_func, '__orig'):
-                    return
-                flash_attn.flash_attn_func = _choose_functions(
-                    flash_attn.flash_attn_func, ops.flash_attn_xla)
-            except ImportError:
-                logger.warn(f"Patch flash_attn.flash_attn_func failed.")
+                f'FlashAttention is not successfully patched with transformers version={version_ts}.'
+            )
     except Exception as e:
         logger.warn(
             f'torchacc will not patch any FlashAttention function due to {e}.')
