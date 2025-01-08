@@ -29,6 +29,9 @@ def parse_log_files(directory):
                         data[backend][model]['memory_usage'].append(
                             memory_usage)
 
+            if len(data[backend][model]['throughput']) == 0:
+                del data[backend][model]
+
     return data
 
 
@@ -66,9 +69,12 @@ def plot_data(data, png_file):
     index = range(len(models))
 
     for i, backend in enumerate(backends):
-        throughputs = [
-            data[backend][model]['throughput'][-1] for model in models
-        ]
+        throughputs = []
+        for model in models:
+            if model in data[backend]:
+                throughputs.append(data[backend][model]['throughput'][-1])
+            else:
+                throughputs.append(0)
         axs[0].bar([pos + bar_width * i for pos in index],
                    throughputs,
                    bar_width,
@@ -84,60 +90,99 @@ def plot_data(data, png_file):
 
     if 'cuda' in backends:
         texts = []
-        cuda_throughputs = [
-            data['cuda'][model]['throughput'][-1] for model in models
-        ]
+        cuda_throughputs = []
+        for model in models:
+            if model in data['cuda']:
+                cuda_throughputs.append(data['cuda'][model]['throughput'][-1])
+            else:
+                cuda_throughputs.append(None)
         for i, backend in enumerate(backends):
             if backend != 'cuda':
-                throughputs = [
-                    data[backend][model]['throughput'][-1] for model in models
-                ]
+                throughputs = []
+                for model in models:
+                    if model in data[backend]:
+                        throughputs.append(
+                            data[backend][model]['throughput'][-1])
+                    else:
+                        throughputs.append(None)
                 for j, (throughput, cuda_throughput) in enumerate(
                         zip(throughputs, cuda_throughputs)):
-                    speedup = throughput / cuda_throughput
-                    text = axs[0].text(
-                        index[j] + bar_width * i,
-                        throughput + 0.01,
-                        f'{speedup:.2f}x',
-                        ha='center',
-                        va='bottom',
-                        fontsize=16)
-                    texts.append(text)
+                    if throughput is not None and cuda_throughput is not None:
+                        speedup = throughput / cuda_throughput
+                        text = axs[0].text(
+                            index[j] + bar_width * i,
+                            throughput + 0.01,
+                            f'{speedup:.2f}x',
+                            ha='center',
+                            va='bottom',
+                            fontsize=16)
+                        texts.append(text)
+                    else:
+                        text = axs[0].text(
+                            index[j] + bar_width * i,
+                            0,
+                            'not run',
+                            ha='center',
+                            va='bottom',
+                            fontsize=16,
+                            color='red')
+                        texts.append(text)
             else:
-                throughputs = [
-                    data[backend][model]['throughput'][-1] for model in models
-                ]
+                throughputs = []
+                for model in models:
+                    if model in data[backend]:
+                        throughputs.append(
+                            data[backend][model]['throughput'][-1])
+                    else:
+                        throughputs.append(None)
                 for j in range(len(models)):
                     text = axs[0].text(
                         index[j] + bar_width * i,
-                        throughputs[j] + 0.01,
-                        f'{1.0:.2f}x',
+                        throughputs[j] +
+                        0.01 if throughputs[j] is not None else 0,
+                        f'{1.0:.2f}x'
+                        if throughputs[j] is not None else 'not run',
                         ha='center',
                         va='bottom',
-                        fontsize=16)
+                        fontsize=16,
+                        color='red' if throughputs[j] is None else 'black')
                     texts.append(text)
         adjust_text(texts, ax=axs[0])
 
     texts = []
     for i, backend in enumerate(backends):
-        memory_usages = [
-            data[backend][model]['memory_usage'][-1] for model in models
-        ]
+        memory_usages = []
+        for model in models:
+            if model in data[backend]:
+                memory_usages.append(data[backend][model]['memory_usage'][-1])
+            else:
+                memory_usages.append(0)
         bars = axs[1].bar([pos + bar_width * i for pos in index],
                           memory_usages,
                           bar_width,
                           label=backend)
 
         for bar, memory_usage in zip(bars, memory_usages):
-            height = bar.get_height()
-            text = axs[1].text(
-                bar.get_x() + bar.get_width() / 2,
-                height + 0.05,
-                f'{memory_usage:.2f} GB',
-                ha='center',
-                va='bottom',
-                fontsize=16)
-            texts.append(text)
+            if memory_usage is not None and memory_usage > 0:
+                height = bar.get_height()
+                text = axs[1].text(
+                    bar.get_x() + bar.get_width() / 2,
+                    height + 0.05,
+                    f'{memory_usage:.2f} GB',
+                    ha='center',
+                    va='bottom',
+                    fontsize=16)
+                texts.append(text)
+            else:
+                text = axs[1].text(
+                    bar.get_x() + bar.get_width() / 2,
+                    0,
+                    'not run',
+                    ha='center',
+                    va='bottom',
+                    fontsize=16,
+                    color='red')
+                texts.append(text)
 
     axs[1].set_title('Max Memory Usage', fontsize=22)
     axs[1].set_ylabel('Memory Usage (GB)', fontsize=20)

@@ -1,4 +1,6 @@
 
+pip install matplotlib adjustText
+
 mkdir -p data
 echo "Downloading data..."
 wget -c https://raw.githubusercontent.com/AlibabaPAI/FlashModels/1c176f39a14de681656f96d8e77a9fa432dbf6cf/data/wikitext-2-raw-v1.json -O data/wikitext-2-raw-v1.json

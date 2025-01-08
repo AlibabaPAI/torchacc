@@ -24,7 +24,7 @@ FSDP_SIZE=4
 
 declare -A BACKAND_PARAMS=(
     ["torchacc"]="--backend lazy"
-    ["hybrid_trace"]="--backend lazy --hybrid_trace"
+    ["hybridtrace"]="--backend lazy --hybrid_trace"
     ["cuda"]="--backend eager"
 )
 
