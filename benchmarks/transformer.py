@@ -88,6 +88,8 @@ def _get_config(args):
     config.compute.fp16 = args.fp16
     config.compute.bf16 = args.bf16
 
+    config.compute.disable_kernel_patches = True
+
     config.memory.gc = args.gc
     config.memory.gc_cls = {args.model_block}
 
@@ -205,6 +207,7 @@ def train_gpt(args):
                         enabled=amp_enabled, dtype=amp_dtype):
                     outputs = model(**inputs)
                     loss = outputs['loss']
+                    del outputs
                 if scaler:
                     scaler.scale(loss).backward()
                     scaler.unscale_(optimizer)
