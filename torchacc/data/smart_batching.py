@@ -46,6 +46,7 @@ class SmartBatchingSampler:
             data_parallel_size,  # Data parallel size
             consumed_samples=0,  # Consumed samples, mainly used for continue train from the last checkpoint
             balance_strategy='micro-batch',  # Balance strategy
+            seed=42, # Random seed. We have to keep the seed same for all the processes.
     ):
         # Keep a copy of input params for later use.
         self.dataset = dataset
@@ -59,6 +60,8 @@ class SmartBatchingSampler:
             self.micro_batch_size * data_parallel_size
         self.balance_strategy = balance_strategy
         self.last_batch_size = self.total_samples % self.micro_batch_times_data_parallel_size
+        self.seed = seed
+        self.generator = torch.Generator()
 
         # Sanity checks.
         assert self.total_samples > 0, \
@@ -74,7 +77,7 @@ class SmartBatchingSampler:
             'invalid dataset_type: {}, only {} are supported'.format(self.dataset_type, 'swift')
 
     def __len__(self):
-        return self.total_samples // self.data_parallel_size // self.micro_batch_size
+        return self.total_samples // self.micro_batch_times_data_parallel_size
 
     def get_sequence_length(self, idx):
         if self.dataset_type == "swift":
@@ -104,10 +107,9 @@ class SmartBatchingSampler:
         assert current_epoch_samples % self.micro_batch_times_data_parallel_size == 0
 
         # Continue train from where it left
-        g = torch.Generator()
-        g.manual_seed(self.epoch)
+        self.generator.manual_seed(self.seed + self.epoch)
         shuffle_samples = torch.randperm(
-            self.total_samples, generator=g).tolist()
+            self.total_samples, generator=self.generator).tolist()
         shuffle_samples = shuffle_samples[current_epoch_samples:]
         # Get one batch
         batch = []
@@ -116,6 +118,6 @@ class SmartBatchingSampler:
             # Balance micro-batch across data parallel ranks
             if (self.balance_strategy == "micro-batch" or self.balance_strategy == "none") and \
                 len(batch) == self.micro_batch_times_data_parallel_size:
-                self.consumed_samples += self.micro_batch_size
+                self.consumed_samples += self.micro_batch_times_data_parallel_size
                 yield self.construct_balanced_batch(batch)
                 batch.clear()
