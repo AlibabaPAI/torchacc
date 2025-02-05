@@ -53,6 +53,7 @@ def _parse_args():
     parser.add_argument('--acc', action='store_true', default=False)
     parser.add_argument('--backend', type=str, default='lazy')
     parser.add_argument('--hybrid_trace', action='store_true', default=False)
+    parser.add_argument('--partial_compile', action='store_true', default=False)
     parser.add_argument('--fp16', action='store_true', default=False)
     parser.add_argument('--bf16', action='store_true', default=False)
     parser.add_argument('--gc', action='store_true', default=False)
@@ -85,6 +86,7 @@ def _get_config(args):
     config = ta.Config()
     config.backend.mode = args.backend
     config.backend.hybrid_trace = args.hybrid_trace
+    config.backend.partial_compile = args.partial_compile
     config.compute.fp16 = args.fp16
     config.compute.bf16 = args.bf16
 
