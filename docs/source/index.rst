@@ -26,7 +26,9 @@ Welcome to TorchAcc's documentation!
    dist/dp
    dist/fsdp
    bucketing
-
+   hybridtracing/hybrid_trace
+   hybridtracing/partial_compile
+   
 .. toctree::
    :maxdepth: 2
    :caption: Tutorials
