@@ -1,6 +1,6 @@
 # Partial Compile
 ## Introduction
-Partial_compile approach in TorchAcc can be employed to achieve performance acceleration over native CUDA execution In scenarios involving complex user code (e.g., extensive tensor evaluations, custom operations, etc.) which is hard for xla to capture whole graph. Specifically, we utilize Dynamo + XLA backend for partial compilation, with  enhancements and optimizations in both functionality and performance.
+Partial compile in TorchAcc can be employed to achieve performance acceleration over native torch cuda execution In scenarios involving complex user code (e.g., extensive tensor evaluations, custom operations, etc.) which is hard for xla to capture whole graph. Specifically, we utilize Dynamo + XLA backend for partial compilation, with enhancements and optimizations in both functionality and performance.
 
 Note: Partial compile runs on TorchAcc eager backend(cuda device).
 ## How to use
@@ -21,5 +21,3 @@ ta.accelerate(model, config=config)
 Below are the sceneries we suggest to use partial compile:
 - model with custom ops which xla do not support.
 - model with extensive tensor evaluations.
-
-## Performance
