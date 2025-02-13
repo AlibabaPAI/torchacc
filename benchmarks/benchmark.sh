@@ -29,6 +29,7 @@ FSDP_SIZE=4
 declare -A BACKAND_PARAMS=(
     ["torchacc"]="--backend lazy"
     ["hybridtrace"]="--backend lazy --hybrid_trace"
+    ["partialcompile"]="--backend eager --partial_compiles"
     ["cuda"]="--backend eager"
 )
 
@@ -38,6 +39,9 @@ function run_benchmark() {
     local fsdp=$3
 
     if [ "$backend" == "hybridtrace" ]; then
+        export USE_TORCH_XLA=1
+        export TORCHACC_PATCH_FA=0
+    elif [ "$backend" == "partialcompile"]; then
         export USE_TORCH_XLA=1
         export TORCHACC_PATCH_FA=0
     elif [ "$backend" == "torchacc" ]; then
@@ -75,6 +79,7 @@ function run_benchmark() {
 
 for MODEL in "${MODELS[@]}"; do
     run_benchmark "$MODEL" "hybridtrace" ${FSDP_SIZE}
+    run_benchmark "$MODEL" "partialcompile" ${FSDP_SIZE}
     run_benchmark "$MODEL" "torchacc" ${FSDP_SIZE}
     run_benchmark "$MODEL" "cuda" ${FSDP_SIZE}
 done

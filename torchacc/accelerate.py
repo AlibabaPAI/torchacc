@@ -186,8 +186,35 @@ def accelerate(
             model = torch.compile(model, backend="hybridtrace")
 
     if config.backend.partial_compile:
+        try:
+            import torch_xla._dynamo.config as config
+            import torch_xla._dynamo.dynamo_bridge as dynamo_bridge
+        except ImportError as e:
+            raise ImportError(
+                "Please follow the instruction in https://torchacc.readthedocs.io/en/stable/install.html to install torch_xla"
+            ) from e
+        # TODO: maybe we should move the config to dynamo_bridge?
+        config.use_call_computation = False
+        config.skip_input_data_check = False
+        config.outside_on_cuda = True
+        config.mark_step_after_layer_if_early_sync = False
+        config.no_xla_graph_sync = True
+        torch.utils.deterministic.fill_uninitialized_memory = False  # disbale initianization for torch.empty()
+
         torch._dynamo.disallow_in_graph(
             torch.nn.functional.scaled_dot_product_attention)
         model = torch.compile(model, backend="openxla")
+        # TODO: current we can't set xla stream as cuda stream because xla
+        # can't receive an externel cuda stream(int) and transfer it to
+        # se::stream.
+        # set cuda stream as xla stream;
+        cuda_device = dist.get_rank() % torch.cuda.device_count(
+        ) if dist.is_initialized() else 0
+        import torch_xla
+        stream = torch_xla._XLAC._get_stream_for_cuda_device(cuda_device)
+        stream = 1 if stream == 0 else stream
+        assert stream is None or type(stream) is int
+        external_stream = torch.cuda.ExternalStream(stream)
+        torch.cuda.set_stream(external_stream)
 
     return (model, dataloader) if dataloader else model
