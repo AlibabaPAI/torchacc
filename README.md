@@ -81,13 +81,5 @@ coming soon..
 see the [contribution guide](docs/source/contributing.md).
 
 
-## Contact Us
-
-You can contact us by adding our DingTalk group:
-
-<p align="center">
-  <img width="30%" src=docs/figures/group.png />
-</p>
-
 ## License
 [Apache License 2.0](LICENSE)
