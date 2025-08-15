@@ -4,6 +4,7 @@ import torch
 
 from torchacc.utils.import_utils import is_torch_xla_available
 
+from . import dynamo_bridge
 from .async_loader import AsyncLoader
 
 if is_torch_xla_available():

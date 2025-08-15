@@ -12,11 +12,18 @@ def get_hf_dataset_loader(tokenizer,
                           global_rank=0,
                           dataset_config=None,
                           data_num_replicas=1):
-    raw_datasets = datasets.load_dataset(
-        dataset_name_or_path,
-        dataset_config,
-        split='train',
-        cache_dir='./log/dataset')
+    if dataset_name_or_path.endswith(".json"):
+        raw_datasets = datasets.load_dataset(
+            "json",
+            data_files=dataset_name_or_path,
+            split='train',
+            cache_dir='./log/dataset')
+    else:
+        raw_datasets = datasets.load_dataset(
+            dataset_name_or_path,
+            dataset_config,
+            split='train',
+            cache_dir='./log/dataset')
     column_names = list(raw_datasets.features)
     text_column_name = 'text' if 'text' in column_names else column_names[0]
 
@@ -65,5 +72,7 @@ def get_hf_dataset_loader(tokenizer,
         batch_size=batch_size,
         collate_fn=transformers.default_data_collator,
         sampler=train_sampler,
+        pin_memory=True,
+        num_workers=4,
         drop_last=True)
     return train_dataloader

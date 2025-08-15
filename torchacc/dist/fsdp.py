@@ -185,6 +185,11 @@ class FullyShardedDataParallel(ParallelModule):
             gc_cnt = config.memory.gc_cnt
 
             def auto_wrapper_callable(m, *args, **kwargs):
+                if config.backend.hybrid_trace:
+                    for submodule in m.modules():
+                        submodule._is_fsdp_managed_module = True
+                        submodule._fsdp_use_orig_params = True
+                    m = torch.compile(m, backend="hybridtrace")
                 nonlocal gc_cnt
                 if gc_cnt is None:
                     m = checkpoint.checkpoint_module(m)
@@ -192,6 +197,22 @@ class FullyShardedDataParallel(ParallelModule):
                     m = checkpoint.checkpoint_module(m)
                     gc_cnt -= 1
                 return xla_fsdp.XlaFullyShardedDataParallel(m, *args, **kwargs)
+        elif config.backend.hybrid_trace:
+
+            def auto_wrapper_callable(m, *args, **kwargs):
+                for submodule in m.modules():
+                    submodule._is_fsdp_managed_module = True
+                    submodule._fsdp_use_orig_params = True
+                m = torch.compile(m, backend="hybridtrace")
+                return xla_fsdp.XlaFullyShardedDataParallel(m, *args, **kwargs)
+
+        extra_kwargs = {}
+        if config.backend.partial_compile:
+            extra_kwargs["use_orig_params"] = True
+            extra_kwargs["forward_prefetch"] = True
+        if config.backend.hybrid_trace:
+            extra_kwargs["shard_param_on_dim_0"] = True
+            extra_kwargs["forward_prefetch"] = True
 
         if config.is_eager_backend():
             if config.dist.dp.size > 1:
@@ -213,7 +234,8 @@ class FullyShardedDataParallel(ParallelModule):
                 auto_wrap_policy=auto_wrap_policy,
                 mixed_precision=mixed_precision,
                 device_id=torch.cuda.current_device(),
-                sync_module_states=config.dist.fsdp.sync_module_states)
+                sync_module_states=config.dist.fsdp.sync_module_states,
+                **extra_kwargs)
         else:
             model = xla_fsdp.XlaFullyShardedDataParallel(
                 model,
@@ -227,7 +249,8 @@ class FullyShardedDataParallel(ParallelModule):
                 buffer_dtype=dtype,
                 sharding_groups=self.mesh.get_fsdp_rank_groups(),
                 sharding_rank=self.mesh.get_fsdp_rank(),
-                sharding_world_size=self.mesh.get_fsdp_num())
+                sharding_world_size=self.mesh.get_fsdp_num(),
+                **extra_kwargs)
         return model
 
     def clip_grad_norm_(self, max_grad_norm):

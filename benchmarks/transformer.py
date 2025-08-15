@@ -12,6 +12,9 @@ from torch.utils.tensorboard import SummaryWriter
 from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer,
                           get_scheduler)
 
+import torch_xla
+import torch_xla.core.xla_model as xm
+
 
 def _args_validation(args):
     if not args.acc:
@@ -36,7 +39,7 @@ def _parse_args():
         '--dataset_config', type=str, default='wikitext-2-raw-v1')
     parser.add_argument('--model_name', type=str, default='gpt2')
     parser.add_argument('--model_block', type=str, default='GPT2Block')
-    parser.add_argument('--tb_folder', type=str, default='./log/tb/')
+    parser.add_argument('--tb_folder', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--max_seq_length', type=int, default=512)
     parser.add_argument('--log_interval', type=int, default=1)
@@ -49,6 +52,7 @@ def _parse_args():
     parser.add_argument('--num_train_epochs', type=int, default=2)
     parser.add_argument('--acc', action='store_true', default=False)
     parser.add_argument('--backend', type=str, default='lazy')
+    parser.add_argument('--hybrid_trace', action='store_true', default=False)
     parser.add_argument('--fp16', action='store_true', default=False)
     parser.add_argument('--bf16', action='store_true', default=False)
     parser.add_argument('--gc', action='store_true', default=False)
@@ -56,6 +60,9 @@ def _parse_args():
     parser.add_argument('--profile', action='store_true', default=False)
     parser.add_argument(
         '--disable_loss_print', action='store_true', default=False)
+    parser.add_argument('--benchmark', action='store_true', default=False)
+    parser.add_argument('--benchmark_steps', type=int, default=100)
+    parser.add_argument('--deterministic', action='store_true', default=False)
 
     args = parser.parse_args()
     args.global_rank = int(os.getenv('RANK', '0'))
@@ -76,9 +83,12 @@ def _setup_ddp(local_rank):
 
 def _get_config(args):
     config = ta.Config()
-    config.backend = args.backend
+    config.backend.mode = args.backend
+    config.backend.hybrid_trace = args.hybrid_trace
     config.compute.fp16 = args.fp16
     config.compute.bf16 = args.bf16
+
+    config.compute.disable_kernel_patches = True
 
     config.memory.gc = args.gc
     config.memory.gc_cls = {args.model_block}
@@ -87,19 +97,27 @@ def _get_config(args):
     config.dist.tp.size = args.tp_size
     config.dist.fsdp.size = args.fsdp_size
     config.dist.fsdp.wrap_layer_cls = {args.model_block}
-    config.dist.fsdp.flatten_parameters = False
+    config.dist.fsdp.flatten_parameters = True
 
     return config
 
 
 def _build_model_and_loader(args):
+    amp_dtype = torch.float16 if args.fp16 else torch.bfloat16
     config = AutoConfig.from_pretrained(
         args.model_name, cache_dir='./log/model_cache')
+    config.use_cache = False
     if args.use_flash_attn:
         model = AutoModelForCausalLM.from_config(
-            config, attn_implementation='flash_attention_2')
+            config,
+            attn_implementation='flash_attention_2',
+            torch_dtype=amp_dtype)
     else:
-        model = AutoModelForCausalLM.from_config(config)
+        model = AutoModelForCausalLM.from_config(
+            config, attn_implementation='eager')
+
+    if args.global_rank == 0:
+        logger.info(f'Model: {model}')
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, use_fast=False)
     tokenizer.model_max_length = args.max_seq_length
@@ -113,6 +131,11 @@ def _build_model_and_loader(args):
     if args.acc:
         config = _get_config(args)
         model, train_loader = ta.accelerate(model, train_loader, config)
+        if not args.hybrid_trace and args.backend == 'lazy':
+            if "llama" in args.model_name.lower():
+                ta.utils.patch.patch_llama(use_flash_attn=args.use_flash_attn)
+            if "qwen" in args.model_name.lower():
+                ta.utils.patch.patch_qwen(use_flash_attn=args.use_flash_attn)
     else:
         model = model.to(args.local_rank)
         model = torch.nn.parallel.DistributedDataParallel(model)
@@ -133,6 +156,14 @@ def _build_lr_scheduler(optimizer, loader, num_train_epochs):
 
 def train_gpt(args):
     model, train_loader = _build_model_and_loader(args)
+
+    if args.benchmark:
+        if len(train_loader) >= (args.benchmark_steps + 6):
+            args.num_train_epochs = 1
+        else:
+            args.num_train_epochs = (args.benchmark_steps +
+                                     6) // len(train_loader) + 1
+
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=5e-5, betas=(0.9, 0.999), eps=1e-8)
     lr_scheduler = _build_lr_scheduler(optimizer, train_loader,
@@ -142,20 +173,26 @@ def train_gpt(args):
     amp_dtype = torch.float16 if args.fp16 else torch.bfloat16
 
     model.train()
-    if args.global_rank == 0:
+    if args.global_rank == 0 and args.tb_folder:
         writer = SummaryWriter(
-            f'./{args.tb_folder}/{args.model_name}_acc-{args.acc}_gpu-{args.world_size}_'
+            f'./{args.tb_folder}/{args.model_name.split("/")[-1]}_acc-{args.backend}_gpu-{args.world_size}_'
             f'amp-{amp_enabled}-{amp_dtype}_'
             f'dp-{args.dp_size}_pp-{args.pp_size}_fsdp-{args.fsdp_size}_'
             f'tp-{args.tp_size}-bs{args.batch_size}_'
             f'disable_loss_print-{args.disable_loss_print}')
         writer.add_text('args', str(args))
+    else:
+        writer = None
 
-    if args.profile:
+    if args.global_rank == 0 and args.profile:
         prof = torch.profiler.profile(
             schedule=torch.profiler.schedule(wait=2, warmup=2, active=6),
+            with_stack=False,
             on_trace_ready=torch.profiler.tensorboard_trace_handler(
                 './log/profile'))
+
+    benchmark_start_step = 5
+    benchmark_end_step = benchmark_start_step + args.benchmark_steps
     iteration_time = time.time()
     with tqdm.tqdm(range(args.num_train_epochs * len(train_loader))) as pbar:
         for epoch in range(args.num_train_epochs):
@@ -166,11 +203,11 @@ def train_gpt(args):
                         for key, value in inputs.items()
                         if isinstance(value, torch.Tensor)
                     }
-                optimizer.zero_grad()
                 with torch.cuda.amp.autocast(
                         enabled=amp_enabled, dtype=amp_dtype):
                     outputs = model(**inputs)
                     loss = outputs['loss']
+                    del outputs
                 if scaler:
                     scaler.scale(loss).backward()
                     scaler.unscale_(optimizer)
@@ -182,37 +219,63 @@ def train_gpt(args):
                     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
                     optimizer.step()
                 lr_scheduler.step()
+                optimizer.zero_grad()
 
+                step = step + epoch * len(train_loader)
                 if step % args.log_interval == 0 and args.global_rank == 0:
                     if args.disable_loss_print:
                         loss = 0.0
                     elif args.acc:
                         ta.sync()
-                    step = step + epoch * len(train_loader)
                     time_cost = time.time() - iteration_time
                     iteration_time = time.time()
-                    writer.add_scalar(
-                        'samples/s',
-                        args.batch_size / time_cost,
-                        global_step=step)
-                    writer.add_scalar('loss', loss, global_step=step)
-                    writer.add_scalar(
-                        'lr', lr_scheduler.get_last_lr()[0], global_step=step)
+                    if writer is not None:
+                        writer.add_scalar(
+                            'samples/s',
+                            args.batch_size / time_cost,
+                            global_step=step)
+                        writer.add_scalar('loss', loss, global_step=step)
+                        writer.add_scalar(
+                            'lr',
+                            lr_scheduler.get_last_lr()[0],
+                            global_step=step)
                     logger.info(
                         f'[Iteration {step}/{len(train_loader)*args.num_train_epochs}] '
-                        f'loss: {loss:.2f}, lr: {lr_scheduler.get_last_lr()[0]}, '
+                        f'loss: {loss:.4f}, lr: {lr_scheduler.get_last_lr()[0]:.4e}, '
                         f'complete in {time_cost:.2f} s')
                 pbar.update(1)
-                if args.profile:
+                if step == benchmark_start_step:
+                    benchmark_start_time = time.time()
+                if args.benchmark and step == benchmark_end_step:
+                    if args.global_rank == 0:
+                        bench_time_cost = time.time() - benchmark_start_time
+                        total_samples = (benchmark_end_step -
+                                         benchmark_start_step
+                                        ) * args.batch_size * args.world_size
+                        logger.info(
+                            f'[BENCHMARK] throughput: {total_samples / bench_time_cost:.4f} samples/s, max memory usage: {torch.cuda.max_memory_allocated() / 1024.0 / 1024.0 / 1024.0:.4f} GB'
+                        )
+                    return
+                if args.global_rank == 0 and args.profile:
                     prof.step()
 
 
 if __name__ == '__main__':
-    torch.manual_seed(42)
-    torch.backends.cudnn.deterministic = True
-    torch.cuda.manual_seed_all(42)
-
     args = _parse_args()
+
+    seed = 101
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    xm.set_rng_state(seed)
+    if args.deterministic:
+        torch.use_deterministic_algorithms(True)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+        os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+        os.environ['TF_DETERMINISTIC_OPS'] = '1'
+        torch_xla._XLAC._xla_set_use_full_mat_mul_precision(
+            use_full_mat_mul_precision=True)
 
     if not args.acc or args.backend != "lazy":
         _setup_ddp(args.local_rank)

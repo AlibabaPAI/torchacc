@@ -1,6 +1,7 @@
 import inspect
 import os
 from functools import wraps
+from typing import Any, Dict, Iterable, Optional, Union
 
 import torch
 
@@ -58,7 +59,31 @@ def patch_amp():
     torch.cuda.amp.GradScaler = amp.GradScaler
 
 
-def patch_fa():
+def patch_optim_step(backend):
+    '''
+    replace the optimizer step with the hybridtrace enabled step.
+    '''
+    if hasattr(torch.optim.Optimizer.__init__, "_orig"):
+        return
+    orign_init_fn = torch.optim.Optimizer.__init__
+
+    def _init_fn(self, params: Union[Iterable[torch.Tensor],
+                                     Iterable[Dict[str, Any]]],
+                 defaults: Dict[str, Any]) -> None:
+        if "lr" in defaults and isinstance(defaults["lr"], (float, int)):
+            defaults["lr"] = torch.tensor(defaults["lr"])
+        orign_init_fn(self, params, defaults)
+
+    torch.optim.Optimizer.__init__ = _patch_functions(
+        torch.optim.Optimizer.__init__, _init_fn)
+    torch.optim.SGD.step = torch.compile(torch.optim.SGD.step, backend=backend)
+    torch.optim.Adam.step = torch.compile(
+        torch.optim.Adam.step, backend=backend)
+    torch.optim.AdamW.step = torch.compile(
+        torch.optim.AdamW.step, backend=backend)
+
+
+def patch_transformers_fa():
     '''
     Replace `transformers.modeling_flash_attention_utils._flash_attention_forward` with
     `torchacc.ops.flash_attn_xla` and `torchacc.ops.flash_attn_varlen_xla`
@@ -74,6 +99,7 @@ def patch_fa():
                 "4.43.0") and version.parse(version_ts) <= version.parse(
                     "4.46.3"):
             from typing import Optional
+
             import transformers.modeling_flash_attention_utils as modeling_flash_attention_utils
 
             def _flash_attention_forward(
@@ -131,7 +157,7 @@ def patch_fa():
                         window_size=window_size,
                         deterministic=deterministic)
 
-            modeling_flash_attention_utils._flash_attention_forward = _patch_functions(
+            modeling_flash_attention_utils._flash_attention_forward = _choose_functions(
                 modeling_flash_attention_utils._flash_attention_forward,
                 _flash_attention_forward)
         elif version.parse(version_ts) > version.parse("4.46.3"):
@@ -201,24 +227,27 @@ def patch_fa():
                         deterministic=deterministic,
                         causal=is_causal)
 
-            modeling_flash_attention_utils._flash_attention_forward = _patch_functions(
+            modeling_flash_attention_utils._flash_attention_forward = _choose_functions(
                 modeling_flash_attention_utils._flash_attention_forward,
                 _flash_attention_forward)
         else:
             logger.warn(
-                f'FlashAttention is not successfully patched with transformers version={version_ts},'
-                ' try to patch flash_attn.flash_attn_func')
-            try:
-                import flash_attn
-                if hasattr(flash_attn.flash_attn_func, '__orig'):
-                    return
-                flash_attn.flash_attn_func = _choose_functions(
-                    flash_attn.flash_attn_func, ops.flash_attn_xla)
-            except ImportError:
-                logger.warn(f"Patch flash_attn.flash_attn_func failed.")
+                f'FlashAttention is not successfully patched with transformers version={version_ts}.'
+            )
     except Exception as e:
         logger.warn(
             f'torchacc will not patch any FlashAttention function due to {e}.')
+
+
+def patch_ta_fa():
+    try:
+        import flash_attn
+        if hasattr(flash_attn.flash_attn_func, '_orig'):
+            return
+        flash_attn.flash_attn_func = _choose_functions(
+            flash_attn.flash_attn_func, ops.flash_attn_xla)
+    except ImportError:
+        logger.warn(f"Patch flash_attn.flash_attn_func failed.")
 
 
 def patch_llama(use_flash_attn):
@@ -253,6 +282,7 @@ def patch_qwen(use_flash_attn):
     and replace flash_attn with the interface in torchacc. This requires transformers>=4.41.0.
     '''
     import inspect
+
     import transformers
     from packaging import version
 
@@ -301,13 +331,27 @@ def patch_qwen(use_flash_attn):
             logger.warning(f"patch qwen2 failed due to: {e}")
 
 
-def patch_autocast():
-    if os.getenv('TORCHACC_PATCH_TORCH_AUTOCAST', '1') in ['1', 'true', 'True']:
+def patch_autocast(target_device='cuda'):
+    if os.getenv('TORCHACC_PATCH_TORCH_AUTOCAST', '1') in [
+            '1', 'true', 'True'
+    ] and not hasattr(torch.autocast.__init__, '_orig'):
         original_init = torch.autocast.__init__
 
-        def patched_init(self, device_type: str, *args, **kwargs):
-            if device_type == 'xla':
+        def patched_init(self,
+                         device_type: str,
+                         dtype: Optional[torch.dtype] = None,
+                         enabled: bool = True,
+                         cache_enabled: Optional[bool] = None):
+            if target_device == 'cuda' and device_type == 'xla':
                 device_type = 'cuda'
-            original_init(self, device_type, *args, **kwargs)
+            elif target_device == 'xla' and device_type == 'cuda':
+                device_type = 'xla'
+            original_init(
+                self,
+                device_type,
+                dtype=dtype,
+                enabled=enabled,
+                cache_enabled=cache_enabled)
 
-        torch.autocast.__init__ = patched_init
+        torch.autocast.__init__ = _patch_functions(torch.autocast.__init__,
+                                                   patched_init)

@@ -278,6 +278,7 @@ def recursively_apply(func,
     return data
 
 
+@torch.compiler.disable(recursive=False)
 def convert_to_fp32(tensor):
     """
     Recursively converts the elements nested list/tuple/dictionary of tensors in FP16/BF16 precision to FP32.
@@ -371,3 +372,20 @@ def apply_to_tensors(fn, container):
             return x
 
     return apply(container)
+
+
+def find_modulelist_classes(model: torch.nn.Module) -> list:
+    modulelist_classes = set()
+
+    def traverse_module(module: torch.nn.Module):
+        for child in module.children():
+            if isinstance(child, torch.nn.ModuleList):
+                for sub_module in child:
+                    class_name = sub_module.__class__.__name__
+                    modulelist_classes.add(class_name)
+            else:
+                traverse_module(child)
+
+    traverse_module(model)
+
+    return modulelist_classes

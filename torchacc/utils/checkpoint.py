@@ -3,8 +3,11 @@ from typing import Dict, Optional, Set
 
 import torch
 import torch.fx as fx
+from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
+    CheckpointImpl, apply_activation_checkpointing, checkpoint_wrapper)
 from torch.fx.passes.split_module import split_module
 
+import torchacc as ta
 from torchacc.utils.import_utils import is_torch_xla_available
 from torchacc.utils.utils import get_module_class_from_name
 
@@ -73,9 +76,22 @@ def gradient_checkpoint(model: torch.nn.Module, gc_cls: Set[str]):
         assert c, f"class {name} in gc_cls not found in model"
         cls.add(c)
 
-    auto_wrap_policy = functools.partial(
-        xla_wrap.transformer_auto_wrap_policy, transformer_layer_cls=cls)
-    auto_wrapper_callable = lambda m, *args, **kwargs: checkpoint_module(m)
-    model, n_params = xla_wrap.recursive_wrap(model, auto_wrap_policy,
-                                              auto_wrapper_callable, (), ())
+    if ta.is_lazy_device(next(model.parameters()).device):
+        auto_wrap_policy = functools.partial(
+            xla_wrap.transformer_auto_wrap_policy, transformer_layer_cls=cls)
+        auto_wrapper_callable = lambda m, *args, **kwargs: checkpoint_module(m)
+        model, n_params = xla_wrap.recursive_wrap(model, auto_wrap_policy,
+                                                  auto_wrapper_callable, (), ())
+    else:
+        # cuda device
+        non_reentrant_wrapper = functools.partial(
+            checkpoint_wrapper,
+            checkpoint_impl=CheckpointImpl.NO_REENTRANT,
+        )
+        cls = tuple(cls)
+        check_fn = lambda submodule: isinstance(submodule, cls)
+        apply_activation_checkpointing(
+            model,
+            checkpoint_wrapper_fn=non_reentrant_wrapper,
+            check_fn=check_fn)
     return model

@@ -119,7 +119,7 @@ def main(args):
 
     # set config
     config = ta.Config()
-    config.backend = args.backend
+    config.backend.mode = args.backend
     config.compute.fp16 = args.fp16
     config.compute.bf16 = args.bf16
 
